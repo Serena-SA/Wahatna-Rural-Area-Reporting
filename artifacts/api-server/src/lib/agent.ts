@@ -194,6 +194,24 @@ export interface AgentAssessment {
   elapsed_ms: number;
 }
 
+// ─── SLA helpers ─────────────────────────────────────────────────────────────
+
+/** Return the SLA deadline for a new incident based on its severity level. */
+export function calculateDueAt(severity: number): Date {
+  const now = Date.now();
+  let hoursToAdd: number;
+  if (severity >= 5) {
+    hoursToAdd = 6;
+  } else if (severity === 4) {
+    hoursToAdd = 24;
+  } else if (severity === 3) {
+    hoursToAdd = 72;
+  } else {
+    hoursToAdd = 144;
+  }
+  return new Date(now + hoursToAdd * 60 * 60 * 1000);
+}
+
 export function assessIncident(
   vision: VisionDict,
   lat: number,
