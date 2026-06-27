@@ -192,6 +192,13 @@ export interface Translations {
   fleet_no_start: string;
   fleet_min_unit: string;
   fleet_remove: string;
+  fleet_label_placeholder: string;
+  fleet_shorter: string;
+  fleet_job_id: string;
+  fleet_km: string;
+  fleet_kmh: string;
+  fleet_gps_instructions_ios: string;
+  fleet_gps_instructions_android: string;
 
   // ── Heat ban ───────────────────────────────────────────────────
   heat_ban_title: string;
@@ -394,6 +401,13 @@ const en: Translations = {
   fleet_no_start: "Start location unavailable",
   fleet_min_unit: "min",
   fleet_remove: "Remove",
+  fleet_label_placeholder: "Label",
+  fleet_shorter: "shorter",
+  fleet_job_id: "Job",
+  fleet_km: "km",
+  fleet_kmh: "km/h",
+  fleet_gps_instructions_ios: "Open Settings → Privacy & Security → Location Services and enable access for this app.",
+  fleet_gps_instructions_android: "Open Settings → Apps → select this app → Permissions → Location → Allow.",
 
   heat_ban_title: "Heat Work Ban",
   heat_ban_body: "MOHRE ban: outdoor work prohibited 12:30–15:00 (15 Jun – 15 Sep).",
@@ -593,6 +607,13 @@ const ar: Translations = {
   fleet_no_start: "موقع البداية غير متاح",
   fleet_min_unit: "دقيقة",
   fleet_remove: "إزالة",
+  fleet_label_placeholder: "التسمية",
+  fleet_shorter: "أقصر",
+  fleet_job_id: "مهمة",
+  fleet_km: "كم",
+  fleet_kmh: "كم/س",
+  fleet_gps_instructions_ios: "افتح الإعدادات ← الخصوصية والأمان ← خدمات الموقع وفعّل الوصول لهذا التطبيق.",
+  fleet_gps_instructions_android: "افتح الإعدادات ← التطبيقات ← اختر التطبيق ← الأذونات ← الموقع ← السماح.",
 
   heat_ban_title: "حظر العمل في الحر",
   heat_ban_body: "حظر وزارة الموارد البشرية: العمل في الخارج ممنوع 12:30–15:00 (15 يونيو–15 سبتمبر).",
@@ -792,6 +813,13 @@ const ur: Translations = {
   fleet_no_start: "آغاز کا مقام دستیاب نہیں",
   fleet_min_unit: "منٹ",
   fleet_remove: "ہٹائیں",
+  fleet_label_placeholder: "لیبل",
+  fleet_shorter: "مختصر",
+  fleet_job_id: "کام",
+  fleet_km: "کلومیٹر",
+  fleet_kmh: "کلومیٹر/گھنٹہ",
+  fleet_gps_instructions_ios: "Settings ← Privacy & Security ← Location Services کھولیں اور اس ایپ کے لیے رسائی فعال کریں۔",
+  fleet_gps_instructions_android: "Settings ← Apps ← یہ ایپ ← Permissions ← Location ← Allow کھولیں۔",
 
   heat_ban_title: "گرمی کام پابندی",
   heat_ban_body: "MOHRE پابندی: 12:30–15:00 بیرونی کام ممنوع (15 جون–15 ستمبر)۔",
@@ -991,6 +1019,13 @@ const hi: Translations = {
   fleet_no_start: "प्रारंभ स्थान अनुपलब्ध",
   fleet_min_unit: "मिनट",
   fleet_remove: "हटाएं",
+  fleet_label_placeholder: "लेबल",
+  fleet_shorter: "छोटा",
+  fleet_job_id: "जॉब",
+  fleet_km: "कि.मी.",
+  fleet_kmh: "कि.मी./घंटा",
+  fleet_gps_instructions_ios: "Settings → Privacy & Security → Location Services खोलें और इस ऐप के लिए एक्सेस सक्षम करें।",
+  fleet_gps_instructions_android: "Settings → Apps → यह ऐप → Permissions → Location → Allow खोलें।",
 
   heat_ban_title: "गर्मी कार्य प्रतिबंध",
   heat_ban_body: "MOHRE प्रतिबंध: 12:30–15:00 बाहरी कार्य निषिद्ध (15 जून–15 सितंबर)।",

@@ -54,9 +54,9 @@ router.post("/fleet/optimize", requireAuth, async (req: AuthedRequest, res: Resp
   const result = optimizeFleetRoute(start, destinations, transportMode, 100, 200);
   const jobId = randomUUID().slice(0, 8);
 
-  // Persist optimized route to DB
+  // Persist optimized stops to DB
   await db.insert(fleetWaypointsTable).values(
-    result.optimized_route.map((item) => ({
+    result.optimized_route.stops.map((item) => ({
       jobId,
       lat: item.lat,
       lon: item.lon,

@@ -43,20 +43,23 @@ interface RouteStop {
   label: string;
   original_index: number;
   distance_to_next_km: number;
+  priority_note: string;
+}
+
+interface RouteResult {
+  stops: RouteStop[];
+  total_distance_km: number;
+  estimated_time_min: number;
 }
 
 interface FleetResult {
   job_id: string;
   transport_mode: string;
-  original_route: RouteStop[];
-  optimized_route: RouteStop[];
+  original_route: RouteResult;
+  optimized_route: RouteResult;
   priority_explanation: string[];
   metrics: {
-    original_distance_km: number;
-    optimized_distance_km: number;
     distance_saved_km: number;
-    original_time_min: number;
-    optimized_time_min: number;
     time_saved_min: number;
     improvement_pct: number;
     speed_kmh: number;
@@ -87,11 +90,11 @@ function fmtDist(km: number): string {
   return km.toFixed(1);
 }
 
-function fmtTime(min: number): string {
+function fmtTime(min: number, hUnit: string, mUnit: string): string {
   const h = Math.floor(min / 60);
   const m = Math.round(min % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (h > 0) return `${h}${hUnit} ${m}${mUnit}`;
+  return `${m}${mUnit}`;
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -318,7 +321,7 @@ export default function FleetScreen() {
       if (start) {
         pts.push({ lat: start.lat, lon: start.lon, label: t("fleet_start_location"), kind: "start" });
       }
-      result.optimized_route.forEach((s) => {
+      result.optimized_route.stops.forEach((s) => {
         const origWp = waypoints[s.original_index];
         const p = origWp?.priority ?? 2;
         pts.push({
@@ -345,7 +348,7 @@ export default function FleetScreen() {
     if (!result) return [];
     const start = getStart();
     const pts: [number, number][] = start ? [[start.lat, start.lon]] : [];
-    result.optimized_route.forEach((s) => pts.push([s.lat, s.lon]));
+    result.optimized_route.stops.forEach((s) => pts.push([s.lat, s.lon]));
     return pts;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, gpsCoord]);
@@ -407,7 +410,9 @@ export default function FleetScreen() {
                 </Text>
               </View>
               <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign }]}>
-                {t("fleet_gps_instructions")}
+                {Platform.OS === "ios"
+                  ? t("fleet_gps_instructions_ios")
+                  : t("fleet_gps_instructions_android")}
               </Text>
               <View style={[styles.coordRow, { flexDirection: rowDir, gap: 8 }]}>
                 <View style={{ flex: 1, gap: 4 }}>
@@ -531,7 +536,7 @@ export default function FleetScreen() {
                   style={[styles.labelInput, { color: colors.text, borderColor: colors.border, flex: 1 }]}
                   value={w.label}
                   onChangeText={(v) => setWaypointLabel(w.id, v)}
-                  placeholder="Label"
+                  placeholder={t("fleet_label_placeholder")}
                   placeholderTextColor={colors.mutedForeground}
                 />
                 <Pressable onPress={() => removeWaypoint(w.id)} hitSlop={8}>
@@ -618,13 +623,13 @@ export default function FleetScreen() {
                     {fmtDist(result.metrics.distance_saved_km)}
                   </Text>
                   <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
-                    km {t("fleet_distance_saved").toLowerCase()}
+                    {t("fleet_km")} {t("fleet_distance_saved").toLowerCase()}
                   </Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.text }]}>
-                    {fmtTime(result.metrics.time_saved_min)}
+                    {fmtTime(result.metrics.time_saved_min, "h", t("fleet_min_unit"))}
                   </Text>
                   <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
                     {t("fleet_time_saved")}
@@ -636,7 +641,7 @@ export default function FleetScreen() {
                     {result.metrics.improvement_pct.toFixed(0)}%
                   </Text>
                   <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
-                    shorter
+                    {t("fleet_shorter")}
                   </Text>
                 </View>
               </View>
@@ -661,13 +666,13 @@ export default function FleetScreen() {
                   {t("fleet_original_order").toUpperCase()}
                 </Text>
                 <Text style={[styles.compDist, { color: colors.text }]}>
-                  {fmtDist(result.metrics.original_distance_km)} km
+                  {fmtDist(result.original_route.total_distance_km)} {t("fleet_km")}
                 </Text>
                 <Text style={[styles.compTime, { color: colors.mutedForeground }]}>
-                  ~{fmtTime(result.metrics.original_time_min)}
+                  ~{fmtTime(result.original_route.estimated_time_min, "h", t("fleet_min_unit"))}
                 </Text>
                 <View style={styles.compStops}>
-                  {result.original_route.map((stop, i) => (
+                  {result.original_route.stops.map((stop, i) => (
                     <View key={i} style={[styles.compStopRow, { flexDirection: rowDir }]}>
                       <View style={[styles.compDot, { backgroundColor: colors.mutedForeground }]} />
                       <Text style={[styles.compStopLabel, { color: colors.text }]} numberOfLines={1}>
@@ -684,24 +689,31 @@ export default function FleetScreen() {
                   {t("fleet_optimized_route").toUpperCase()}
                 </Text>
                 <Text style={[styles.compDist, { color: colors.primary }]}>
-                  {fmtDist(result.metrics.optimized_distance_km)} km
+                  {fmtDist(result.optimized_route.total_distance_km)} {t("fleet_km")}
                 </Text>
                 <Text style={[styles.compTime, { color: colors.mutedForeground }]}>
-                  ~{fmtTime(result.metrics.optimized_time_min)}
+                  ~{fmtTime(result.optimized_route.estimated_time_min, "h", t("fleet_min_unit"))}
                 </Text>
                 <View style={styles.compStops}>
-                  {result.optimized_route.map((stop, i) => {
+                  {result.optimized_route.stops.map((stop, i) => {
                     const origWp = waypoints[stop.original_index];
                     const p = origWp?.priority ?? 2;
                     return (
-                      <View key={i} style={[styles.compStopRow, { flexDirection: rowDir }]}>
-                        <View style={[styles.compDot, { backgroundColor: priorityColor(p, colors) }]} />
-                        <Text style={[styles.compStopLabel, { color: colors.text }]} numberOfLines={1}>
-                          {stop.label}
-                        </Text>
-                        {stop.distance_to_next_km > 0 && (
-                          <Text style={[styles.compKm, { color: colors.mutedForeground }]}>
-                            {stop.distance_to_next_km.toFixed(1)} km
+                      <View key={i} style={{ gap: 2 }}>
+                        <View style={[styles.compStopRow, { flexDirection: rowDir }]}>
+                          <View style={[styles.compDot, { backgroundColor: priorityColor(p, colors) }]} />
+                          <Text style={[styles.compStopLabel, { color: colors.text }]} numberOfLines={1}>
+                            {stop.label}
+                          </Text>
+                          {stop.distance_to_next_km > 0 && (
+                            <Text style={[styles.compKm, { color: colors.mutedForeground }]}>
+                              {stop.distance_to_next_km.toFixed(1)} {t("fleet_km")}
+                            </Text>
+                          )}
+                        </View>
+                        {!!stop.priority_note && (
+                          <Text style={[styles.priorityNote, { color: "#EA580C", textAlign }]} numberOfLines={2}>
+                            ↑ {stop.priority_note}
                           </Text>
                         )}
                       </View>
@@ -713,7 +725,7 @@ export default function FleetScreen() {
 
             {/* Job ID */}
             <Text style={[styles.jobId, { color: colors.mutedForeground, textAlign }]}>
-              Job #{result.job_id} · {result.transport_mode} · {result.metrics.speed_kmh} km/h
+              {t("fleet_job_id")} #{result.job_id} · {result.transport_mode} · {result.metrics.speed_kmh} {t("fleet_kmh")}
             </Text>
           </Animated.View>
         )}
@@ -839,5 +851,6 @@ const styles = StyleSheet.create({
   compDot: { width: 8, height: 8, borderRadius: 4 },
   compStopLabel: { fontSize: 11, flex: 1 },
   compKm: { fontSize: 10 },
+  priorityNote: { fontSize: 10, fontStyle: "italic" as const, marginLeft: 14 },
   jobId: { fontSize: 10 },
 });

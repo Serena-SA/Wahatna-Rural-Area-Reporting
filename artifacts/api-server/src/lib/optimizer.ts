@@ -36,7 +36,11 @@ function openPathDistance(start: Coord, route: Route, destCoords: Coord[]): numb
   return d;
 }
 
-/** Priority-weighted fitness for open-path routing */
+/** Priority-weighted fitness for open-path routing.
+ *  Formula: totalDistance + sum(priority_i × position_i × PRIORITY_WEIGHT)
+ *  High-priority stops at later positions accumulate a larger penalty,
+ *  so the GA prefers to visit them early.
+ */
 function openPathFitness(
   start: Coord,
   route: Route,
@@ -47,7 +51,6 @@ function openPathFitness(
   let penalty = 0;
   for (let pos = 0; pos < route.length; pos++) {
     const p = priorities[route[pos]!] ?? 1;
-    // High-priority stops at later positions accumulate penalty
     penalty += p * pos * PRIORITY_WEIGHT;
   }
   return dist + penalty;
@@ -96,7 +99,6 @@ function tournamentSelect(
   return best;
 }
 
-/** Tournament selection using an arbitrary fitness function */
 function tournamentSelectFn(
   population: Route[],
   fitness: (r: Route) => number,
@@ -265,19 +267,26 @@ export interface FleetRouteStop {
   label: string;
   original_index: number;
   distance_to_next_km: number;
+  /** Short explanation of why this stop is at this position, if priority affected it */
+  priority_note: string;
+}
+
+export interface FleetRouteResult {
+  stops: FleetRouteStop[];
+  total_distance_km: number;
+  estimated_time_min: number;
 }
 
 export interface FleetOptimizeResult {
-  original_route: FleetRouteStop[];
-  optimized_route: FleetRouteStop[];
+  /** Stops in original input order with per-route totals */
+  original_route: FleetRouteResult;
+  /** Stops in GA-optimized order with per-route totals */
+  optimized_route: FleetRouteResult;
+  /** Summary strings for each stop moved earlier due to high severity */
   priority_explanation: string[];
   transport_mode: string;
   metrics: {
-    original_distance_km: number;
-    optimized_distance_km: number;
     distance_saved_km: number;
-    original_time_min: number;
-    optimized_time_min: number;
     time_saved_min: number;
     improvement_pct: number;
     speed_kmh: number;
@@ -289,6 +298,13 @@ function transportSpeedKmh(mode: string): number {
   if (mode === "walking") return 5;
   if (mode === "service_vehicle") return 30;
   return 40; // car (default)
+}
+
+function priorityLabel(p: number): string {
+  if (p >= 5) return "critical";
+  if (p >= 4) return "high";
+  if (p >= 2) return "medium";
+  return "low";
 }
 
 export function optimizeFleetRoute(
@@ -306,11 +322,16 @@ export function optimizeFleetRoute(
   );
   const speed = transportSpeedKmh(transportMode);
 
-  function buildStops(route: Route): FleetRouteStop[] {
-    return route.map((origIdx, pos) => {
+  function buildRoute(route: Route, withPriorityNotes: boolean): FleetRouteResult {
+    const stops: FleetRouteStop[] = route.map((origIdx, pos) => {
       const coord = destCoords[origIdx]!;
       const nextCoord =
         pos < route.length - 1 ? destCoords[route[pos + 1]!]! : null;
+      const p = priorities[origIdx] ?? 1;
+      let priority_note = "";
+      if (withPriorityNotes && p >= 4 && pos < origIdx) {
+        priority_note = `Moved to position ${pos + 1} (was ${origIdx + 1}) — ${priorityLabel(p)} priority`;
+      }
       return {
         order: pos + 1,
         lat: coord[0],
@@ -318,27 +339,28 @@ export function optimizeFleetRoute(
         label: destinations[origIdx]?.label ?? `Stop ${origIdx + 1}`,
         original_index: origIdx,
         distance_to_next_km: nextCoord ? round(haversine(coord, nextCoord), 4) : 0,
+        priority_note,
       };
     });
+    const totalDist = openPathDistance(start, route, destCoords);
+    return {
+      stops,
+      total_distance_km: round(totalDist, 4),
+      estimated_time_min: round((totalDist / speed) * 60, 1),
+    };
   }
 
   const originalRoute: Route = Array.from({ length: n }, (_, i) => i);
-  const originalDist = openPathDistance(start, originalRoute, destCoords);
 
   if (n <= 1) {
-    const stops = buildStops(originalRoute);
-    const t = round((originalDist / speed) * 60, 1);
+    const origResult = buildRoute(originalRoute, false);
     return {
-      original_route: stops,
-      optimized_route: stops,
-      priority_explanation: [],
+      original_route: origResult,
+      optimized_route: origResult,
+      priority_explanation: origResult.stops.map(() => ""),
       transport_mode: transportMode,
       metrics: {
-        original_distance_km: round(originalDist, 4),
-        optimized_distance_km: round(originalDist, 4),
         distance_saved_km: 0,
-        original_time_min: t,
-        optimized_time_min: t,
         time_saved_min: 0,
         improvement_pct: 0,
         speed_kmh: speed,
@@ -379,33 +401,27 @@ export function optimizeFleetRoute(
     }
   }
 
-  const optimizedDist = openPathDistance(start, bestRoute, destCoords);
-  const saved = Math.max(0, originalDist - optimizedDist);
-  const improvement = originalDist > 0 ? (saved / originalDist) * 100 : 0;
+  const originalResult = buildRoute(originalRoute, false);
+  const optimizedResult = buildRoute(bestRoute, true);
 
-  // Collect priority explanations: high-priority stops that appear earlier
-  // in optimized route than their original position
-  const explanations: string[] = [];
-  for (let pos = 0; pos < bestRoute.length; pos++) {
-    const origIdx = bestRoute[pos]!;
-    const p = priorities[origIdx] ?? 1;
-    if (p >= 4 && pos < origIdx) {
-      const label = destinations[origIdx]?.label ?? `Stop ${origIdx + 1}`;
-      explanations.push(label);
-    }
-  }
+  const saved = Math.max(0, originalResult.total_distance_km - optimizedResult.total_distance_km);
+  const improvement =
+    originalResult.total_distance_km > 0
+      ? (saved / originalResult.total_distance_km) * 100
+      : 0;
+
+  // Collect priority explanations: stops that were moved earlier in optimized route
+  const explanations = optimizedResult.stops
+    .filter((s) => s.priority_note.length > 0)
+    .map((s) => `${s.label}: ${s.priority_note}`);
 
   return {
-    original_route: buildStops(originalRoute),
-    optimized_route: buildStops(bestRoute),
+    original_route: originalResult,
+    optimized_route: optimizedResult,
     priority_explanation: explanations,
     transport_mode: transportMode,
     metrics: {
-      original_distance_km: round(originalDist, 4),
-      optimized_distance_km: round(optimizedDist, 4),
       distance_saved_km: round(saved, 4),
-      original_time_min: round((originalDist / speed) * 60, 1),
-      optimized_time_min: round((optimizedDist / speed) * 60, 1),
       time_saved_min: round((saved / speed) * 60, 1),
       improvement_pct: round(improvement, 2),
       speed_kmh: speed,
