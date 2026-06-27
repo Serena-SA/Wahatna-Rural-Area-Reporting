@@ -290,6 +290,9 @@ function ReportCard({
           <Text style={[styles.cardRef, { color: colors.text, textAlign }]}>
             {report.reference}
           </Text>
+          <Text style={[styles.cardCat, { color: colors.primary, textAlign }]}>
+            {report.threat_label || (report.threat_class ? t(`cat_${report.threat_class}` as never) : "")}
+          </Text>
           <Text style={[styles.cardDate, { color: colors.mutedForeground, textAlign }]}>
             {formatDateTime(report.created_at, isRTL)}
           </Text>
@@ -521,7 +524,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   cardRef: { fontSize: 15, fontWeight: "700" as const, letterSpacing: 0.3 },
-  cardDate: { fontSize: 11, marginTop: 2 },
+  cardCat: { fontSize: 11, fontWeight: "600" as const, marginTop: 1 },
+  cardDate: { fontSize: 11, marginTop: 1 },
   badgeRow: { gap: 6, flexWrap: "wrap", alignItems: "center" },
   statusPill: {
     borderRadius: 999,

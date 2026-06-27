@@ -869,12 +869,14 @@ export default function ReportScreen() {
               <View style={[styles.summaryRow, { flexDirection: row, borderBottomColor: colors.border }]}>
                 <Feather name="map-pin" size={16} color={colors.mutedForeground} style={isRTL ? styles.iconRTL : styles.iconLTR} />
                 <Text style={[styles.summaryKey, { color: colors.mutedForeground }]}>
-                  {locationSource === "gps" ? t("loc_source_gps") : t("loc_source_address")}
+                  {locationSource === "gps" ? t("loc_source_gps") : locationSource === "pin" ? t("loc_source_pin") : t("loc_source_address")}
                 </Text>
                 <Text style={[styles.summaryVal, { color: colors.text }]}>
                   {locationSource === "gps"
                     ? `${gpsLat?.toFixed(4)}, ${gpsLon?.toFixed(4)}`
-                    : selectedGeo?.label ?? addressText}
+                    : locationSource === "pin"
+                      ? `${pinLat?.toFixed(4)}, ${pinLon?.toFixed(4)}`
+                      : selectedGeo?.label ?? addressText}
                 </Text>
               </View>
 
@@ -886,7 +888,7 @@ export default function ReportScreen() {
 
               <View style={[styles.summaryRow, { flexDirection: row, borderBottomColor: "transparent" }]}>
                 <Feather name="camera" size={16} color={colors.mutedForeground} style={isRTL ? styles.iconRTL : styles.iconLTR} />
-                <Text style={[styles.summaryKey, { color: colors.mutedForeground }]}>Photos</Text>
+                <Text style={[styles.summaryKey, { color: colors.mutedForeground }]}>{t("report_step_photos")}</Text>
                 <Text style={[styles.summaryVal, { color: colors.text }]}>{photos.length}</Text>
               </View>
             </GlassCard>

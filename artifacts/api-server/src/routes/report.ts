@@ -72,7 +72,7 @@ router.post(
     const phonePrimary: string | undefined = body.phone_primary;
     const phoneSecondary: string | undefined = body.phone_secondary;
     const imageFile = req.file;
-    const imageFilename = imageFile?.originalname ?? null;
+    const imageFilename = imageFile?.filename ?? null;
 
     const vision = analyzeCategory(category, !!imageFile);
     const assessment = assessIncident(vision, lat, lon, reportText);
