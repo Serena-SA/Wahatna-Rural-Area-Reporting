@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, lt, not, inArray } from "drizzle-orm";
-import { db, incidentsTable, usersTable } from "@workspace/db";
+import { and, desc, eq, lt, not, inArray, isNotNull } from "drizzle-orm";
+import { db, incidentsTable, usersTable, reportsTable } from "@workspace/db";
 import { requireAuth, requireSupervisor, type AuthedRequest } from "../lib/auth";
 import { reportDict } from "../lib/serialize";
 
@@ -240,6 +240,98 @@ router.patch(
       : [];
 
     res.json(enrichedReportDict(updated[0], reporterRow[0]?.username ?? null));
+  },
+);
+
+/** PATCH /api/supervisor/reports/:id/dispatch — record that water/food was sent */
+router.patch(
+  "/supervisor/reports/:id/dispatch",
+  requireAuth,
+  requireSupervisor,
+  async (req: AuthedRequest, res: Response) => {
+    const incidentId = Number(req.params["id"]);
+    if (Number.isNaN(incidentId)) {
+      res.status(400).json({ detail: "Invalid report id" });
+      return;
+    }
+
+    const updated = await db
+      .update(incidentsTable)
+      .set({
+        resourcesDispatchedAt: new Date(),
+        resourcesDispatchedBy: req.user?.id ?? null,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(incidentsTable.id, incidentId))
+      .returning();
+
+    if (!updated[0]) {
+      res.status(404).json({ detail: "Report not found" });
+      return;
+    }
+
+    const reporterRow = updated[0].userId
+      ? await db.select({ username: usersTable.username }).from(usersTable).where(eq(usersTable.id, updated[0].userId)).limit(1)
+      : [];
+
+    res.json(enrichedReportDict(updated[0], reporterRow[0]?.username ?? null));
+  },
+);
+
+/** DELETE /api/supervisor/reports/:id — permanently remove a report (hard delete) */
+router.delete(
+  "/supervisor/reports/:id",
+  requireAuth,
+  requireSupervisor,
+  async (req: Request, res: Response) => {
+    const incidentId = Number(req.params["id"]);
+    if (Number.isNaN(incidentId)) {
+      res.status(400).json({ detail: "Invalid report id" });
+      return;
+    }
+
+    const existing = await db
+      .select({ id: incidentsTable.id })
+      .from(incidentsTable)
+      .where(eq(incidentsTable.id, incidentId))
+      .limit(1);
+    if (!existing[0]) {
+      res.status(404).json({ detail: "Report not found" });
+      return;
+    }
+
+    // Remove dependent reports rows first (FK), then the incident itself.
+    await db.transaction(async (tx) => {
+      await tx.delete(reportsTable).where(eq(reportsTable.incidentId, incidentId));
+      await tx.delete(incidentsTable).where(eq(incidentsTable.id, incidentId));
+    });
+
+    res.json({ deleted: incidentId });
+  },
+);
+
+/** POST /api/supervisor/reports/clear-demo — delete all seeded demo reports.
+ *  Seed data is the only data with a non-null confidence (real community
+ *  reports leave confidence null because the CV classifier is stubbed). */
+router.post(
+  "/supervisor/reports/clear-demo",
+  requireAuth,
+  requireSupervisor,
+  async (_req: Request, res: Response) => {
+    const demo = await db
+      .select({ id: incidentsTable.id })
+      .from(incidentsTable)
+      .where(isNotNull(incidentsTable.confidence));
+    const ids = demo.map((d) => d.id);
+
+    if (ids.length > 0) {
+      await db.transaction(async (tx) => {
+        await tx.delete(reportsTable).where(inArray(reportsTable.incidentId, ids));
+        await tx.delete(incidentsTable).where(inArray(incidentsTable.id, ids));
+      });
+    }
+
+    res.json({ deleted: ids.length });
   },
 );
 

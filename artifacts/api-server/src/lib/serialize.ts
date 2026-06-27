@@ -59,6 +59,9 @@ export function reportDict(incident: Incident): Record<string, unknown> {
     escalated_at: incident.escalatedAt ? incident.escalatedAt.toISOString() : null,
     supervisor_notes: incident.supervisorNotes,
     rejection_reason: incident.rejectionReason,
+    resources_dispatched_at: incident.resourcesDispatchedAt
+      ? incident.resourcesDispatchedAt.toISOString()
+      : null,
     status_history: statusHistory,
     created_at: incident.createdAt ? incident.createdAt.toISOString() : null,
     updated_at: incident.updatedAt ? incident.updatedAt.toISOString() : null,

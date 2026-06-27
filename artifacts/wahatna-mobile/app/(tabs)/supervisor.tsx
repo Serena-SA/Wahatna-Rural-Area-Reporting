@@ -50,6 +50,7 @@ interface Report {
   image_url: string | null;
   supervisor_notes: string | null;
   rejection_reason: string | null;
+  resources_dispatched_at: string | null;
   status_history: StatusHistoryEntry[];
   due_at: string | null;
   created_at: string | null;
@@ -384,6 +385,7 @@ function ReportCard({
   const [notesText, setNotesText] = useState(report.supervisor_notes ?? "");
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
 
   useEffect(() => {
     setSelStatus(report.status);
@@ -434,6 +436,24 @@ function ReportCard({
       Alert.alert(t("err_generic"), e instanceof Error ? e.message : String(e));
     } finally {
       setSavingNotes(false);
+    }
+  }
+
+  async function handleDispatch() {
+    setDispatching(true);
+    try {
+      const res = await apiFetch(
+        `/supervisor/reports/${report.id}/dispatch`,
+        { method: "PATCH" },
+        token,
+      );
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+      const updated = (await res.json()) as Report;
+      onUpdated(updated);
+    } catch (e: unknown) {
+      Alert.alert(t("err_generic"), e instanceof Error ? e.message : String(e));
+    } finally {
+      setDispatching(false);
     }
   }
 
@@ -607,6 +627,32 @@ function ReportCard({
               <Text style={[styles.actionBtnText, { color: colors.primary }]}>{t("sup_save_note")}</Text>
             )}
           </Pressable>
+
+          {/* Resource dispatch (water / food) */}
+          <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 12 }]} />
+          {report.resources_dispatched_at ? (
+            <View style={[styles.dispatchDone, { flexDirection: rowDir, borderColor: colors.success + "55", backgroundColor: colors.success + "14" }]}>
+              <Feather name="check-circle" size={16} color={colors.success} />
+              <Text style={[styles.dispatchDoneText, { color: colors.success, textAlign }]}>
+                {t("sup_dispatched")} · {formatDateTime(report.resources_dispatched_at, isRTL)}
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#0EA5E9", opacity: dispatching ? 0.7 : 1, flexDirection: rowDir, gap: 8 }]}
+              onPress={handleDispatch}
+              disabled={dispatching}
+            >
+              {dispatching ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Feather name="package" size={16} color="#fff" />
+                  <Text style={[styles.actionBtnText, { color: "#fff" }]}>{t("sup_dispatch")}</Text>
+                </>
+              )}
+            </Pressable>
+          )}
 
           {/* Status history timeline */}
           {report.status_history.length > 0 && (
@@ -997,6 +1043,17 @@ const styles = StyleSheet.create({
 
   // Divider
   divider: { height: 1 },
+
+  // Resource dispatch
+  dispatchDone: {
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  dispatchDoneText: { fontSize: 13, fontWeight: "600" as const, flex: 1 },
 
   // Timeline
   timelineItem: { borderLeftWidth: 2, marginLeft: 6, paddingLeft: 12, paddingBottom: 12, gap: 4 },

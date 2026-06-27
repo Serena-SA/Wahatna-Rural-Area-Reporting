@@ -81,6 +81,8 @@ export interface MapPinDropOptions {
   pinDropEnabled?: boolean;
   pinMarker?: { lat: number; lon: number };
   initialCenter?: { lat: number; lon: number; zoom?: number };
+  /** Draw the route line dashed — used for straight-line (no road route) fallback. */
+  routeDashed?: boolean;
 }
 
 export function buildMapHtml(
@@ -137,7 +139,7 @@ export function buildMapHtml(
   }
 
   if (route && route.length > 1) {
-    L.polyline(route, { color: '${theme.route}', weight: 4, opacity: 0.85 }).addTo(map);
+    L.polyline(route, { color: '${theme.route}', weight: 4, opacity: 0.85${pinOpts.routeDashed ? ", dashArray: '8, 10'" : ""} }).addTo(map);
   }
 
   var bounds = [];

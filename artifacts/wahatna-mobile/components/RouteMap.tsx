@@ -13,6 +13,7 @@ interface RouteMapProps {
   initialCenter?: { lat: number; lon: number; zoom?: number };
   onPinDrop?: (lat: number, lon: number) => void;
   onMarkerPress?: (id: number) => void;
+  routeDashed?: boolean;
 }
 
 export function RouteMap({
@@ -24,10 +25,11 @@ export function RouteMap({
   initialCenter,
   onPinDrop,
   onMarkerPress,
+  routeDashed = false,
 }: RouteMapProps) {
   const colors = useColors();
   const scheme = useColorScheme();
-  const pinOpts: MapPinDropOptions = { pinDropEnabled, pinMarker, initialCenter };
+  const pinOpts: MapPinDropOptions = { pinDropEnabled, pinMarker, initialCenter, routeDashed };
   const html = buildMapHtml(
     points,
     route,

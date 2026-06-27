@@ -49,6 +49,9 @@ export interface Translations {
   home_heat_ban_body: string;
   home_safety: string;
   home_language: string;
+  home_bg_auto: string;
+  home_bg_day: string;
+  home_bg_night: string;
 
   // ── Report flow ────────────────────────────────────────────────
   report_title: string;
@@ -197,6 +200,25 @@ export interface Translations {
   fleet_use_gps: string;
   fleet_routed_roads: string;
   fleet_routed_straight: string;
+  fleet_from_reports: string;
+  fleet_reports_none: string;
+  reports_title: string;
+  reports_delete: string;
+  reports_delete_confirm: string;
+  reports_clear_demo: string;
+  reports_clear_demo_confirm: string;
+  reports_cancel: string;
+  heat_ban_starts_in: string;
+  heat_ban_ends_in: string;
+  heat_ban_none: string;
+  heat_tropic: string;
+  heat_advisory_120: string;
+  heat_advisory_60: string;
+  heat_advisory_30: string;
+  report_heat_ban_warning: string;
+  report_heat_emergency_note: string;
+  sup_dispatch: string;
+  sup_dispatched: string;
   fleet_priority: string;
   fleet_min_waypoints: string;
   fleet_no_start: string;
@@ -281,6 +303,9 @@ const en: Translations = {
   home_heat_ban_body: "Outdoor work prohibited 12:30–15:00 under MOHRE regulations.",
   home_safety: "Safety Alert",
   home_language: "Language",
+  home_bg_auto: "Auto",
+  home_bg_day: "Day",
+  home_bg_night: "Night",
 
   report_title: "Report Hazard",
   report_step_category: "Category & Details",
@@ -421,6 +446,25 @@ const en: Translations = {
   fleet_use_gps: "Use my location",
   fleet_routed_roads: "Routed on real roads",
   fleet_routed_straight: "Straight-line estimate",
+  fleet_from_reports: "Add from reports",
+  fleet_reports_none: "No unresolved reports",
+  reports_title: "All Reports",
+  reports_delete: "Delete",
+  reports_delete_confirm: "Delete this report permanently?",
+  reports_clear_demo: "Clear demo data",
+  reports_clear_demo_confirm: "Delete all demo / seeded reports? This cannot be undone.",
+  reports_cancel: "Cancel",
+  heat_ban_starts_in: "Ban starts in",
+  heat_ban_ends_in: "Ban ends in",
+  heat_ban_none: "No midday ban now",
+  heat_tropic: "Al Qua'a sits on the Tropic of Cancer — peak solar radiation.",
+  heat_advisory_120: "Midday ban approaching — drink enough water now.",
+  heat_advisory_60: "Ban within the hour — move to shaded areas.",
+  heat_advisory_30: "Ban in 30 minutes — wrap up and leave before it starts.",
+  report_heat_ban_warning: "UAE midday ban active — outdoor dispatch on hold. Emergency services still available.",
+  report_heat_emergency_note: "Heat emergencies can be reported any time — ban or not.",
+  sup_dispatch: "Dispatch water & food",
+  sup_dispatched: "Water & food dispatched",
   fleet_priority: "Priority",
   fleet_min_waypoints: "Add at least one destination waypoint",
   fleet_no_start: "Start location unavailable",
@@ -502,6 +546,9 @@ const ar: Translations = {
   home_heat_ban_body: "يُحظر العمل في الخارج من 12:30 إلى 15:00 وفق لوائح وزارة الموارد البشرية.",
   home_safety: "تنبيه سلامة",
   home_language: "اللغة",
+  home_bg_auto: "تلقائي",
+  home_bg_day: "نهار",
+  home_bg_night: "ليل",
 
   report_title: "الإبلاغ عن خطر",
   report_step_category: "الفئة والتفاصيل",
@@ -642,6 +689,25 @@ const ar: Translations = {
   fleet_use_gps: "استخدم موقعي",
   fleet_routed_roads: "موجَّه على طرق حقيقية",
   fleet_routed_straight: "تقدير بخط مستقيم",
+  fleet_from_reports: "إضافة من البلاغات",
+  fleet_reports_none: "لا توجد بلاغات غير محلولة",
+  reports_title: "كل البلاغات",
+  reports_delete: "حذف",
+  reports_delete_confirm: "حذف هذا البلاغ نهائيًا؟",
+  reports_clear_demo: "مسح البيانات التجريبية",
+  reports_clear_demo_confirm: "حذف جميع البلاغات التجريبية؟ لا يمكن التراجع عن ذلك.",
+  reports_cancel: "إلغاء",
+  heat_ban_starts_in: "يبدأ الحظر خلال",
+  heat_ban_ends_in: "ينتهي الحظر خلال",
+  heat_ban_none: "لا يوجد حظر ظهيرة الآن",
+  heat_tropic: "تقع Al Qua'a على مدار السرطان — أقصى إشعاع شمسي.",
+  heat_advisory_120: "حظر الظهيرة يقترب — اشرب كمية كافية من الماء الآن.",
+  heat_advisory_60: "الحظر خلال ساعة — انتقل إلى مناطق مظللة.",
+  heat_advisory_30: "الحظر خلال 30 دقيقة — أنهِ عملك وغادر قبل أن يبدأ.",
+  report_heat_ban_warning: "حظر الظهيرة في الإمارات نشط — تم تعليق الإرسال الخارجي. خدمات الطوارئ لا تزال متاحة.",
+  report_heat_emergency_note: "يمكن الإبلاغ عن حالات الإجهاد الحراري الطارئة في أي وقت.",
+  sup_dispatch: "إرسال ماء وطعام",
+  sup_dispatched: "تم إرسال الماء والطعام",
   fleet_priority: "الأولوية",
   fleet_min_waypoints: "أضف نقطة وجهة واحدة على الأقل",
   fleet_no_start: "موقع البداية غير متاح",
@@ -723,6 +789,9 @@ const ur: Translations = {
   home_heat_ban_body: "MOHRE قواعد کے تحت 12:30–15:00 بیرونی کام ممنوع ہے۔",
   home_safety: "حفاظتی الرٹ",
   home_language: "زبان",
+  home_bg_auto: "خودکار",
+  home_bg_day: "دن",
+  home_bg_night: "رات",
 
   report_title: "خطرے کی رپورٹ",
   report_step_category: "قسم اور تفصیل",
@@ -863,6 +932,25 @@ const ur: Translations = {
   fleet_use_gps: "میرا مقام استعمال کریں",
   fleet_routed_roads: "اصل سڑکوں پر روٹ",
   fleet_routed_straight: "سیدھی لکیر کا تخمینہ",
+  fleet_from_reports: "رپورٹس سے شامل کریں",
+  fleet_reports_none: "کوئی غیر حل شدہ رپورٹ نہیں",
+  reports_title: "تمام رپورٹس",
+  reports_delete: "حذف کریں",
+  reports_delete_confirm: "اس رپورٹ کو مستقل طور پر حذف کریں؟",
+  reports_clear_demo: "ڈیمو ڈیٹا صاف کریں",
+  reports_clear_demo_confirm: "تمام ڈیمو رپورٹس حذف کریں؟ اسے واپس نہیں کیا جا سکتا۔",
+  reports_cancel: "منسوخ کریں",
+  heat_ban_starts_in: "پابندی شروع ہونے میں",
+  heat_ban_ends_in: "پابندی ختم ہونے میں",
+  heat_ban_none: "اس وقت کوئی دوپہر پابندی نہیں",
+  heat_tropic: "Al Qua'a خطِ سرطان پر واقع ہے — زیادہ سے زیادہ شمسی تابکاری۔",
+  heat_advisory_120: "دوپہر کی پابندی قریب ہے — ابھی کافی پانی پئیں۔",
+  heat_advisory_60: "پابندی ایک گھنٹے میں — سایہ دار جگہوں پر چلے جائیں۔",
+  heat_advisory_30: "پابندی 30 منٹ میں — کام سمیٹیں اور شروع ہونے سے پہلے نکل جائیں۔",
+  report_heat_ban_warning: "یو اے ای دوپہر پابندی فعال — بیرونی ڈسپیچ روک دیا گیا۔ ہنگامی خدمات اب بھی دستیاب ہیں۔",
+  report_heat_emergency_note: "گرمی کی ہنگامی صورتحال کسی بھی وقت رپورٹ کی جا سکتی ہے۔",
+  sup_dispatch: "پانی اور کھانا بھیجیں",
+  sup_dispatched: "پانی اور کھانا بھیج دیا گیا",
   fleet_priority: "ترجیح",
   fleet_min_waypoints: "کم از کم ایک منزل کا نقطہ شامل کریں",
   fleet_no_start: "آغاز کا مقام دستیاب نہیں",
@@ -944,6 +1032,9 @@ const hi: Translations = {
   home_heat_ban_body: "MOHRE नियमों के तहत 12:30–15:00 बाहरी कार्य प्रतिबंधित है।",
   home_safety: "सुरक्षा अलर्ट",
   home_language: "भाषा",
+  home_bg_auto: "स्वतः",
+  home_bg_day: "दिन",
+  home_bg_night: "रात",
 
   report_title: "खतरे की रिपोर्ट",
   report_step_category: "श्रेणी और विवरण",
@@ -1084,6 +1175,25 @@ const hi: Translations = {
   fleet_use_gps: "मेरा स्थान उपयोग करें",
   fleet_routed_roads: "वास्तविक सड़कों पर मार्ग",
   fleet_routed_straight: "सीधी रेखा अनुमान",
+  fleet_from_reports: "रिपोर्ट से जोड़ें",
+  fleet_reports_none: "कोई अनसुलझी रिपोर्ट नहीं",
+  reports_title: "सभी रिपोर्ट",
+  reports_delete: "हटाएँ",
+  reports_delete_confirm: "इस रिपोर्ट को स्थायी रूप से हटाएँ?",
+  reports_clear_demo: "डेमो डेटा हटाएँ",
+  reports_clear_demo_confirm: "सभी डेमो / सीड रिपोर्ट हटाएँ? यह पूर्ववत नहीं किया जा सकता।",
+  reports_cancel: "रद्द करें",
+  heat_ban_starts_in: "प्रतिबंध शुरू होने में",
+  heat_ban_ends_in: "प्रतिबंध समाप्त होने में",
+  heat_ban_none: "अभी कोई दोपहर प्रतिबंध नहीं",
+  heat_tropic: "Al Qua'a कर्क रेखा पर स्थित है — अधिकतम सौर विकिरण।",
+  heat_advisory_120: "दोपहर प्रतिबंध निकट है — अभी पर्याप्त पानी पिएँ।",
+  heat_advisory_60: "प्रतिबंध एक घंटे में — छायादार क्षेत्रों में चले जाएँ।",
+  heat_advisory_30: "प्रतिबंध 30 मिनट में — काम समेटें और शुरू होने से पहले निकलें।",
+  report_heat_ban_warning: "यूएई दोपहर प्रतिबंध सक्रिय — बाहरी डिस्पैच रोक दिया गया। आपातकालीन सेवाएँ अभी भी उपलब्ध हैं।",
+  report_heat_emergency_note: "गर्मी की आपात स्थिति किसी भी समय रिपोर्ट की जा सकती है।",
+  sup_dispatch: "पानी और भोजन भेजें",
+  sup_dispatched: "पानी और भोजन भेजा गया",
   fleet_priority: "प्राथमिकता",
   fleet_min_waypoints: "कम से कम एक गंतव्य वेपॉइंट जोड़ें",
   fleet_no_start: "प्रारंभ स्थान अनुपलब्ध",

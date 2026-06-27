@@ -12,7 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DesertBackground, type DesertMode } from "@/components/DesertBackground";
 import { GlassCard } from "@/components/GlassCard";
+import { HeatBanner } from "@/components/HeatBanner";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { apiGet } from "@/constants/api";
 import { LANGUAGE_OPTIONS, type Language } from "@/constants/i18n";
@@ -33,12 +35,6 @@ interface Report {
   severity_label: string;
   risk_level: string;
   created_at: string | null;
-}
-
-interface HeatCompliance {
-  ban_active: boolean;
-  current_temp_c: number;
-  risk_level: string;
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -95,9 +91,15 @@ export default function HomeScreen() {
   const { isOnline } = useNetworkState();
 
   const [recentReports, setRecentReports] = useState<Report[]>([]);
-  const [heatCompliance, setHeatCompliance] = useState<HeatCompliance | null>(null);
   const [loadingReports, setLoadingReports] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [bgMode, setBgMode] = useState<DesertMode>("auto");
+
+  const BG_MODES: { key: DesertMode; icon: "clock" | "sun" | "moon"; label: string }[] = [
+    { key: "auto", icon: "clock", label: t("home_bg_auto") },
+    { key: "day", icon: "sun", label: t("home_bg_day") },
+    { key: "night", icon: "moon", label: t("home_bg_night") },
+  ];
 
   const dir = isRTL ? "rtl" : "ltr";
   const row: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
@@ -110,16 +112,10 @@ export default function HomeScreen() {
   const loadData = async () => {
     if (!token) return;
     try {
-      const [reportsData, dashData] = await Promise.allSettled([
-        apiGet<{ reports: Report[] }>("/reports/my", token),
-        apiGet<{ heat_compliance: HeatCompliance }>("/dashboard", token),
-      ]);
-      if (reportsData.status === "fulfilled") {
-        setRecentReports(reportsData.value.reports.slice(0, 3));
-      }
-      if (dashData.status === "fulfilled") {
-        setHeatCompliance(dashData.value.heat_compliance ?? null);
-      }
+      const reportsData = await apiGet<{ reports: Report[] }>("/reports/my", token);
+      setRecentReports(reportsData.reports.slice(0, 3));
+    } catch {
+      // keep any previously loaded reports on transient failure
     } finally {
       setLoadingReports(false);
     }
@@ -139,6 +135,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <DesertBackground mode={bgMode} />
       <ScrollView
         contentContainerStyle={{
           paddingTop: topPad + 8,
@@ -154,18 +151,58 @@ export default function HomeScreen() {
         {/* ── Header ────────────────────────────────────────── */}
         <View style={[styles.headerRow, { flexDirection: row }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.greeting, { color: colors.mutedForeground, textAlign }]}>
+            <Text style={[styles.greeting, styles.onBg, { textAlign }]}>
               {greeting}
             </Text>
-            <Text style={[styles.appName, { color: colors.text, textAlign }]}>WAHATNA</Text>
+            <Text style={[styles.appName, styles.onBg, { textAlign }]}>WAHATNA</Text>
           </View>
           <Pressable
             onPress={logout}
-            style={[styles.logoutBtn, { borderColor: colors.border }]}
+            style={styles.logoutBtn}
+            accessibilityLabel={t("auth_logout")}
           >
-            <Feather name="log-out" size={18} color={colors.mutedForeground} />
+            <Feather name="log-out" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
+
+        {/* ── Day / night background toggle (for demos) ──────── */}
+        <View style={[styles.bgToggleRow, { flexDirection: row }]}>
+          {BG_MODES.map(opt => {
+            const selected = bgMode === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                onPress={() => setBgMode(opt.key)}
+                accessibilityLabel={opt.label}
+                style={[
+                  styles.bgToggleChip,
+                  {
+                    flexDirection: row,
+                    backgroundColor: selected ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.28)",
+                    borderColor: selected ? colors.primary : "rgba(255,255,255,0.45)",
+                  },
+                ]}
+              >
+                <Feather
+                  name={opt.icon}
+                  size={13}
+                  color={selected ? colors.primary : "#FFFFFF"}
+                />
+                <Text
+                  style={[
+                    styles.bgToggleText,
+                    { color: selected ? colors.primary : "#FFFFFF" },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* ── Heat compliance banner (live temp · ban · Tropic of Cancer) ── */}
+        <HeatBanner />
 
         {/* ── Offline chip ──────────────────────────────────── */}
         {pendingCount > 0 && (
@@ -199,33 +236,14 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        {/* ── Heat ban card ─────────────────────────────────── */}
-        {heatCompliance?.ban_active && (
-          <GlassCard padding={14}>
-            <View style={[styles.heatRow, { flexDirection: row }]}>
-              <View style={[styles.heatIcon, { backgroundColor: "#FEF3C7" }]}>
-                <Feather name="sun" size={20} color="#D97706" />
-              </View>
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <Text style={[styles.heatTitle, { color: "#D97706", textAlign }]}>
-                  {t("home_heat_ban_title")}
-                </Text>
-                <Text style={[styles.heatBody, { color: colors.mutedForeground, textAlign }]}>
-                  {t("home_heat_ban_body")}
-                </Text>
-              </View>
-            </View>
-          </GlassCard>
-        )}
-
         {/* ── Recent reports strip ──────────────────────────── */}
         <View>
           <View style={[styles.sectionHeader, { flexDirection: row }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text, textAlign }]}>
+            <Text style={[styles.sectionTitle, styles.onBg, { textAlign }]}>
               {t("home_my_reports")}
             </Text>
             <Pressable onPress={() => router.push("/(tabs)/my-reports")}>
-              <Text style={[styles.viewAll, { color: colors.primary }]}>{t("home_view_all")}</Text>
+              <Text style={[styles.viewAll, styles.onBg]}>{t("home_view_all")}</Text>
             </Pressable>
           </View>
 
@@ -336,16 +354,36 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   headerRow: { alignItems: "center", gap: 12 },
-  greeting: { fontSize: 14, fontWeight: "500" as const },
+  greeting: { fontSize: 14, fontWeight: "600" as const },
   appName: { fontSize: 26, fontWeight: "900" as const, letterSpacing: 4, lineHeight: 32 },
+  // Text that sits directly on the desert background — light with a soft shadow
+  // so it stays legible over both the day and night artwork.
+  onBg: {
+    color: "#FFFFFF",
+    textShadowColor: "rgba(0,0,0,0.55)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
   logoutBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.5)",
+    backgroundColor: "rgba(0,0,0,0.28)",
     alignItems: "center",
     justifyContent: "center",
   },
+  bgToggleRow: { gap: 8, marginTop: -4 },
+  bgToggleChip: {
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  bgToggleText: { fontSize: 12, fontWeight: "700" as const },
   offlineChip: {
     alignItems: "center",
     gap: 8,

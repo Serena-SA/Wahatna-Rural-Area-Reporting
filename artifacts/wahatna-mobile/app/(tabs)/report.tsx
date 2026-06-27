@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "@/components/GlassCard";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { geocode, type GeoResult } from "@/constants/api";
+import { isHeatBanActive } from "@/constants/heat";
 import { useAuth } from "@/context/AuthContext";
 import { useTranslation } from "@/context/LanguageContext";
 import { useOfflineQueue } from "@/context/OfflineQueueContext";
@@ -506,6 +507,24 @@ export default function ReportScreen() {
                 </Pressable>
               ))}
             </View>
+
+            {/* Heat-stress: ban warning during the window, emergency note otherwise */}
+            {category === "heat_stress" &&
+              (isHeatBanActive() ? (
+                <View style={[styles.heatBanWarn, { flexDirection: row }]}>
+                  <Feather name="alert-triangle" size={16} color="#DC2626" />
+                  <Text style={[styles.heatBanWarnText, { textAlign }]}>
+                    {t("report_heat_ban_warning")}
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.heatEmergencyNote, { flexDirection: row }]}>
+                  <Feather name="thermometer" size={16} color="#EA580C" />
+                  <Text style={[styles.heatEmergencyNoteText, { textAlign }]}>
+                    {t("report_heat_emergency_note")}
+                  </Text>
+                </View>
+              ))}
 
             {/* Description */}
             <Text style={[styles.label, { color: colors.mutedForeground, textAlign }]}>
@@ -1069,6 +1088,26 @@ const styles = StyleSheet.create({
   },
   offlineBannerText: { fontSize: 13, fontWeight: "600" as const, lineHeight: 19 },
   emergencyNote: { fontSize: 12, color: "#DC2626", marginTop: 6, fontWeight: "600" as const },
+  heatBanWarn: {
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderColor: "#DC2626",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  heatBanWarnText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: "#DC2626", fontWeight: "600" as const },
+  heatEmergencyNote: {
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FDBA74",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  heatEmergencyNoteText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: "#9A3412", fontWeight: "600" as const },
   summaryTitle: { fontSize: 11, fontWeight: "700" as const, letterSpacing: 1, marginBottom: 14 },
   summaryRow: {
     flexDirection: "row",

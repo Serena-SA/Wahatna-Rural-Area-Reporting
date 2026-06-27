@@ -63,7 +63,16 @@ export async function getRoadRoute(coords: Coord[], mode: string): Promise<RoadR
 
   const profile = modeToProfile(mode);
   // ORS expects [lon, lat]; our Coord is [lat, lon].
-  const body = { coordinates: coords.map(([lat, lon]) => [lon, lat]), units: "km" };
+  // radiuses: -1 lets ORS snap each point to the nearest road with NO distance
+  // limit. This is essential for rural/desert UAE coordinates (e.g. Al Qua'a,
+  // Al Ain Oasis) that sit far from any mapped road — without it ORS returns
+  // 404 "could not find routable point within 350 m" and we fall back to a
+  // straight line. One radius entry per coordinate is required.
+  const body = {
+    coordinates: coords.map(([lat, lon]) => [lon, lat]),
+    radiuses: coords.map(() => -1),
+    units: "km",
+  };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

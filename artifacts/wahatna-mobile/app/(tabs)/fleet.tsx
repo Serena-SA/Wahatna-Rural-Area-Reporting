@@ -57,6 +57,14 @@ interface WaypointItem {
   priority: number; // 1–5
 }
 
+interface ReportWaypoint {
+  id: number;
+  label: string;
+  lat: number;
+  lon: number;
+  severity: number;
+}
+
 interface RouteStop {
   order: number;
   lat: number;
@@ -94,6 +102,14 @@ interface FleetResult {
 
 let idCounter = 0;
 const newId = () => `w${Date.now()}_${idCounter++}`;
+
+/** Map an incident severity (1–5) to a fleet waypoint priority (1/2/4/5). */
+function severityToPriority(sev: number): number {
+  if (sev >= 5) return 5;
+  if (sev >= 4) return 4;
+  if (sev >= 2) return 2;
+  return 1;
+}
 
 const PRIORITY_LEVELS: { value: number; key: "fleet_priority_low" | "fleet_priority_medium" | "fleet_priority_high" | "fleet_priority_critical" }[] = [
   { value: 1, key: "fleet_priority_low" },
@@ -207,6 +223,11 @@ export default function FleetScreen() {
   // Waypoints (destinations only)
   const [waypoints, setWaypoints] = useState<WaypointItem[]>([]);
 
+  // Unresolved user reports available to add as waypoints (supervisor)
+  const [reportWps, setReportWps] = useState<ReportWaypoint[]>([]);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
   // Search
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
@@ -286,6 +307,39 @@ export default function FleetScreen() {
       .finally(() => setHistoryLoading(false));
   }, [token]);
 
+  // ── Fetch unresolved reports (dashboard active incidents) ──────────────────
+
+  useEffect(() => {
+    if (!token) return;
+    setReportsLoading(true);
+    apiGet<{
+      active_incidents: Array<{
+        id: number;
+        reference: string;
+        threat_label: string | null;
+        threat_class: string | null;
+        severity: number;
+        latitude: number | null;
+        longitude: number | null;
+      }>;
+    }>("/supervisor/dashboard", token)
+      .then((d) => {
+        setReportWps(
+          (d.active_incidents ?? [])
+            .filter((r) => r.latitude != null && r.longitude != null)
+            .map((r) => ({
+              id: r.id,
+              label: `${r.reference} · ${r.threat_label ?? r.threat_class ?? ""}`.trim(),
+              lat: r.latitude as number,
+              lon: r.longitude as number,
+              severity: r.severity ?? 3,
+            })),
+        );
+      })
+      .catch(() => {})
+      .finally(() => setReportsLoading(false));
+  }, [token]);
+
   // ── Replay a past job ─────────────────────────────────────────────────────
 
   const replayJob = useCallback(async (jobId: string) => {
@@ -352,6 +406,14 @@ export default function FleetScreen() {
     setQuery("");
     setSearchResults([]);
     setSearchError("");
+    setResult(null);
+  }, []);
+
+  const addReportWaypoint = useCallback((r: ReportWaypoint) => {
+    setWaypoints((prev) => [
+      ...prev,
+      { id: newId(), label: r.label, lat: r.lat, lon: r.lon, priority: severityToPriority(r.severity) },
+    ]);
     setResult(null);
   }, []);
 
@@ -564,6 +626,7 @@ export default function FleetScreen() {
           }
           initialCenter={gpsCoord ? { lat: gpsCoord.lat, lon: gpsCoord.lon, zoom: 12 } : undefined}
           onPinDrop={handleStartPinDrop}
+          routeDashed={!!result && !result.routed}
         />
 
         {/* ── Start Location ── */}
@@ -794,6 +857,50 @@ export default function FleetScreen() {
               <Feather name="plus-circle" size={18} color={colors.primary} />
             </Pressable>
           ))}
+
+          {/* Add unresolved user reports as waypoints */}
+          <Pressable
+            onPress={() => setReportsOpen((o) => !o)}
+            style={[styles.fromReportsToggle, { borderColor: colors.border, flexDirection: rowDir }]}
+          >
+            <Feather name="clipboard" size={14} color={colors.primary} />
+            <Text style={[styles.fromReportsText, { color: colors.primary, textAlign }]}>
+              {t("fleet_from_reports")}
+              {reportWps.length ? ` (${reportWps.length})` : ""}
+            </Text>
+            <Feather name={reportsOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+          </Pressable>
+
+          {reportsOpen &&
+            (reportsLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : reportWps.length === 0 ? (
+              <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign }]}>
+                {t("fleet_reports_none")}
+              </Text>
+            ) : (
+              reportWps.map((r) => (
+                <Pressable
+                  key={r.id}
+                  onPress={() => addReportWaypoint(r)}
+                  style={({ pressed }) => [
+                    styles.resultRow,
+                    { borderColor: colors.border, opacity: pressed ? 0.6 : 1, flexDirection: rowDir },
+                  ]}
+                >
+                  <Feather name="alert-triangle" size={14} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.resultLabel, { color: colors.text, textAlign }]} numberOfLines={1}>
+                      {r.label}
+                    </Text>
+                    <Text style={[styles.resultAddr, { color: colors.mutedForeground, textAlign }]} numberOfLines={1}>
+                      {r.lat.toFixed(4)}, {r.lon.toFixed(4)}
+                    </Text>
+                  </View>
+                  <Feather name="plus-circle" size={18} color={colors.primary} />
+                </Pressable>
+              ))
+            ))}
         </GlassCard>
 
         {/* ── Waypoint list with priority ── */}
@@ -1145,6 +1252,8 @@ const styles = StyleSheet.create({
   disclaimerText: { fontSize: 11, flex: 1 },
   searchRow: { alignItems: "center", gap: 8 },
   searchInput: { flex: 1, height: 38, fontSize: 14 },
+  fromReportsToggle: { alignItems: "center", gap: 8, paddingVertical: 10, borderTopWidth: 1, marginTop: 2 },
+  fromReportsText: { fontSize: 13, fontWeight: "600" as const, flex: 1 },
   resultRow: {
     alignItems: "center",
     gap: 10,

@@ -66,6 +66,9 @@ export const incidentsTable = pgTable("incidents", {
   // Contact info
   phonePrimary: text("phone_primary"),
   phoneSecondary: text("phone_secondary"),
+  // Resource dispatch (water / food) by a supervisor
+  resourcesDispatchedAt: timestamp("resources_dispatched_at"),
+  resourcesDispatchedBy: integer("resources_dispatched_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

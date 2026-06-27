@@ -112,18 +112,22 @@ export default function TabLayout() {
         }
       />
 
-      {/* ── Fleet ───────────────────────────────────────────── */}
+      {/* ── Fleet (supervisors only) ────────────────────────── */}
       <Tabs.Screen
         name="fleet"
-        options={{
-          title: t("nav_fleet"),
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="truck.box" tintColor={color} size={22} />
-            ) : (
-              <Feather name="truck" size={22} color={color} />
-            ),
-        }}
+        options={
+          isSupervisor
+            ? {
+                title: t("nav_fleet"),
+                tabBarIcon: ({ color }) =>
+                  isIOS ? (
+                    <SymbolView name="truck.box" tintColor={color} size={22} />
+                  ) : (
+                    <Feather name="truck" size={22} color={color} />
+                  ),
+              }
+            : { href: null, title: "Fleet" }
+        }
       />
 
       {/* ── Dashboard (legacy — hidden, kept for deep-link compat) */}
