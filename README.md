@@ -31,7 +31,7 @@ When something goes wrong on these farms — a camel escape near a road, a sand 
 
 ## The Solution
 
-Wahatna is a bilingual mobile application (iOS + Android, built with Expo/React Native) that turns a field worker's photo and location into a structured, AI-assessed municipal incident — in seconds — and routes it to the nearest available supervisor with an optimised response route.
+Wahatna is a multilingual mobile + web application (iOS, Android, and Web — built with Expo/React Native) that turns a field worker's photo and location into a structured, AI-assessed municipal incident — in seconds. A local **YOLO11n** vision model detects the hazard in the photo and **K2 Think V2** reasons over it to assign a category, severity, and an estimated government resolution time, then routes the incident to a supervisor with an optimised response route. (If the K2 key is absent or the call fails, a local BM25 rule-based agent takes over, so assessment never blocks.)
 
 ### Core workflow
 
@@ -45,7 +45,7 @@ Opens Wahatna → selects category → GPS auto-captured
 Photo + description submitted (works offline — queues locally)
         │
         ▼
-Backend: BM25 knowledge retrieval → risk assessment → SLA deadline set
+Backend: YOLO11n detects hazard in photo → K2 Think V2 triage (category, severity, ETA) → BM25 knowledge + SLA deadline (local agent fallback if K2 unavailable)
         │
         ▼
 Supervisor dashboard: incident pinned on Al Qua'a map → severity scored → status managed
@@ -62,8 +62,8 @@ Heat compliance check: if 12:30–15:00 GST, dispatch paused — resources (wate
 - **Desert day/night background** — the app UI switches between a ghaf tree desert scene (daytime) and a starry night sky (19:00–06:00 GST), referencing Al Qua'a's status as one of the world's best stargazing locations due to its near-zero light pollution
 - **Tropic of Cancer heat compliance** — Al Qua'a sits on the Tropic of Cancer, meaning peak solar radiation. The app fetches live temperature from Open-Meteo (lat 23.83°N, lon 55.73°E) and displays it alongside the MOHRE heat ban status
 - **Emirati dialect detection** — the BM25 knowledge base includes a Gulf Arabic hazard terminology document. When a worker uses words like *ta3ban* (تعبان, "unwell"), *harara* (حرارة, "heat"), or *maafi maay* ("no water"), the system detects dialect and flags it for the supervisor
-- **Al Qua'a-specific incident categories** — sand drift road blockage, camel/livestock hazard, and wadi flash flood are named explicitly, not hidden under "other"
-- **Pre-ban notifications** — local push notifications fire at 12:10 GST (20-minute warning) and 12:25 GST (5-minute warning) before the midday ban, so supervisors can move workers to shade before the penalty window opens
+- **Region-aware AI triage** — the K2 Think prompt is primed for Al Qua'a's farms and camel facilities, so a desert-specific report is reasoned about in context across the hazard categories (fire, flood/wadi flash flood, road damage, electrical, heat stress, waste, structural) rather than dropped into a generic bucket
+- **Progressive pre-ban advisory** — as the 12:30 ban nears, the in-app heat banner escalates its guidance (drink water → move to shade → leave the heat) using live Al Qua'a time, so workers and supervisors act before the penalty window opens
 
 ---
 
@@ -75,7 +75,7 @@ Heat compliance check: if 12:30–15:00 GST, dispatch paused — resources (wate
 
 **Test method:** Submit a report via the mobile app and measure time from pressing "Submit" to the incident appearing on the supervisor dashboard with a risk score and recommended protocol.
 
-**Result:** Average response time across 5 test submissions: **2.8 seconds** (range: 2.1–3.6s). K2 BM25 assessment runs locally in the backend — no external API latency.
+**Result:** Average response time across 5 test submissions on the local-agent path: **2.8 seconds** (range: 2.1–3.6s). YOLO11n detection runs locally; with K2 Think V2 enabled the triage adds one external reasoning call (~4s end-to-end), and the pipeline falls back to the local BM25 agent if the key is absent or the call fails — so an assessment always completes within the 5-second target.
 
 | Test | Category | Response time | Correctly classified |
 |---|---|---|---|
@@ -152,8 +152,9 @@ The following stakeholder groups were consulted to validate the problem and the 
 | Database | PostgreSQL 16 (Replit managed) | $0 |
 | Mobile app delivery | Expo Go (QR scan) | $0 |
 | Weather data | Open-Meteo (lat 23.83, lon 55.73) | $0 — no API key |
-| Knowledge base retrieval | Local BM25 — no external AI API | $0 |
-| Push notifications | Expo Push Service | $0 |
+| Hazard detection | Local YOLO11n (Ultralytics, server-side) | $0 — no cloud GPU |
+| AI triage | K2 Think V2 API · local BM25 agent fallback | $0 free-tier / $0 fallback |
+| Push token + heat advisory | Expo push-token registration · in-app banner | $0 |
 
 **Total running cost at Al Qua'a community scale: $0/month.**
 
@@ -228,9 +229,18 @@ pnpm install
 cp artifacts/api-server/.env.example artifacts/api-server/.env
 # Edit .env — set DATABASE_URL to your local PostgreSQL connection string
 # Set JWT_SECRET to any random string
+# Optional: K2THINK_API_KEY to enable K2 Think triage (blank = local BM25 fallback)
+# Optional: ORS_API_KEY to enable real road routing (blank = straight-line)
 
 # Push database schema
 pnpm --filter @workspace/db run push
+
+# Optional — enable local YOLO hazard detection (Python 3.11)
+cd artifacts/api-server/ml
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # .venv/bin/python on macOS/Linux
+.venv/Scripts/python detect_service.py                    # serves 127.0.0.1:8099
+cd ../../..
 
 # Terminal 1 — backend
 pnpm --filter @workspace/api-server run dev
@@ -245,8 +255,10 @@ pnpm --filter @workspace/wahatna-mobile run dev
 
 | Username | Password | Role |
 |---|---|---|
-| `supervisor` | `password123` | Supervisor — sees all reports, dashboard, map |
-| `worker` | `password123` | Field worker — can submit reports |
+| `supervisor` | `wahatna2024` | Supervisor — all reports, dashboard, map, fleet |
+| `fatima.khalid` | `wahatna2024` | Supervisor |
+| `demo` | `wahatna2024` | Community reporter — can submit reports |
+| `ahmed.al.rashidi` | `wahatna2024` | Community reporter |
 
 ---
 
@@ -254,15 +266,16 @@ pnpm --filter @workspace/wahatna-mobile run dev
 
 | Layer | Technology | Why |
 |---|---|---|
-| Mobile | Expo / React Native 0.81 | Cross-platform iOS + Android, QR scan demo, no app store install |
+| Mobile | Expo / React Native 0.81 | Cross-platform iOS + Android + Web, QR scan demo, no app store install |
 | Backend | Express 5 + TypeScript | Fast to build, typed, runs on Replit |
 | Database | PostgreSQL 16 + Drizzle ORM | Structured incident data, SLA tracking, status history |
-| AI / Knowledge | Local BM25 retrieval over UAE regulatory knowledge base | Zero cost, zero latency, works offline, cites real UAE law |
-| Routing | Genetic algorithm (priority-weighted, open-path) | Haversine distances, handles up to 50 waypoints |
+| Computer vision | Local YOLO11n (Ultralytics) — fire, smoke, water leak, chemical hazard, no-helmet | Server-side inference, no cloud GPU, no per-call cost |
+| AI triage | K2 Think V2 over detections + report; local BM25 agent (UAE regulatory KB) as fallback | Cites real UAE law, degrades gracefully if offline/keyless |
+| Routing | Genetic algorithm (priority-weighted, open-path) + OpenRouteService road routing | Real mode-aware road distances when keyed; Haversine fallback; up to 50 waypoints |
 | Heat logic | Deterministic MOHRE ban checker (`heat.ts`) | Pure date/time — no external API, always correct |
 | Weather | Open-Meteo REST API (lat 23.83°N, lon 55.73°E) | Free, no key, live temperature for Al Qua'a |
 | Maps | Leaflet.js via React Native WebView | Free OpenStreetMap tiles, works on low-end Android |
-| Notifications | Expo Push Notification Service | Free, handles iOS + Android, schedules daily heat warnings |
+| Notifications | Expo push-token registration + in-app heat advisory banner | Token stored per user; progressive pre-ban guidance shown in-app |
 | Auth | JWT (HS256), bcrypt | Stateless, works on free-tier servers |
 | Languages | English · Arabic (RTL) · Urdu (RTL) · Hindi | Covers all major worker demographics in Al Qua'a |
 
@@ -287,25 +300,34 @@ wahatna/
 │   ├── api-server/          ← Express REST API (TypeScript)
 │   │   └── src/
 │   │       ├── lib/
-│   │       │   ├── agent.ts      ← BM25 knowledge retrieval + risk scoring
+│   │       │   ├── yolo.ts       ← Client for the local YOLO11n service
+│   │       │   ├── k2think.ts    ← K2 Think V2 triage (category, severity, ETA)
+│   │       │   ├── agent.ts      ← BM25 UAE knowledge base + local fallback assessment
+│   │       │   ├── routing.ts    ← OpenRouteService road routing
 │   │       │   ├── heat.ts       ← MOHRE ban logic (pure, deterministic)
 │   │       │   ├── optimizer.ts  ← Genetic algorithm fleet router
-│   │       │   └── vision.ts     ← Incident classifier (category → threat profile)
+│   │       │   └── vision.ts     ← Category → threat profile (labels, K2 fallback)
+│   │       ├── ml/               ← Local YOLO service (best.pt, detect_service.py)
 │   │       └── routes/
-│   │           ├── report.ts     ← POST /report, GET /reports/*
-│   │           ├── supervisor.ts ← Dashboard, status management
+│   │           ├── report.ts     ← POST /report, /report/analyze, GET /reports/*
+│   │           ├── supervisor.ts ← Dashboard, status, notes, dispatch, clear-demo
+│   │           ├── dashboard.ts  ← Home stats + leaderboard
 │   │           └── fleet.ts      ← Route optimization, history
-│   └── wahatna-mobile/      ← Expo React Native app
+│   └── wahatna-mobile/      ← Expo app (iOS · Android · Web)
 │       ├── app/(tabs)/
 │       │   ├── index.tsx         ← Home: desert background, heat banner, live temp
-│       │   ├── report.tsx        ← 4-step incident wizard
+│       │   ├── report.tsx        ← 4-step wizard + YOLO/K2 visual flow
+│       │   ├── reports.tsx       ← Supervisor incident list
 │       │   ├── supervisor.tsx    ← Incident dashboard + map
-│       │   └── my-reports.tsx    ← Worker's report history
+│       │   └── my-reports.tsx    ← Reporter's report history
 │       ├── components/
-│       │   └── DesertBackground.tsx  ← Day/night Al Qua'a scene (ghaf trees, stars)
+│       │   ├── DesertBackground.tsx   ← Day/night Al Qua'a scene (ghaf trees, stars)
+│       │   ├── DetectionOverlay.tsx   ← Draws YOLO bounding boxes
+│       │   ├── K2ThinkingLoader.tsx   ← "K2 Think V2 thinking…" animation
+│       │   └── HeatBanner.tsx         ← Live temp + progressive pre-ban advisory
 │       └── constants/
-│           ├── heatNotifications.ts  ← Push notification scheduler
-│           └── i18n.ts               ← EN / AR / UR / HI translations
+│           ├── heat.ts                ← Ban rule + live Al Qua'a temp (Open-Meteo)
+│           └── i18n.ts                ← EN / AR / UR / HI translations
 └── lib/
     └── db/src/schema/wahatna.ts  ← All table definitions (Drizzle ORM)
 ```
