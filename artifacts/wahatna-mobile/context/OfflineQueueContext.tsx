@@ -5,24 +5,35 @@ const QUEUE_KEY = "wahatna_offline_queue";
 
 export type QueueItemStatus = "pending" | "syncing" | "synced" | "failed";
 
+export interface QueuePayload {
+  lat: number;
+  lon: number;
+  reportText: string;
+  category: string;
+  imageUri?: string;
+  phone_primary?: string;
+  phone_secondary?: string;
+  address_details?: string;
+  location_source?: string;
+}
+
 export interface QueueItem {
   id: string;
   createdAt: string;
   status: QueueItemStatus;
   errorMessage?: string;
-  payload: {
-    lat: number;
-    lon: number;
-    reportText: string;
-    category: string;
-    imageUri?: string;
-  };
+  payload: QueuePayload;
+}
+
+interface DuplicateWarning {
+  message: string;
+  existingId: string;
 }
 
 interface OfflineQueueContextValue {
   queue: QueueItem[];
   pendingCount: number;
-  addToQueue: (payload: QueueItem["payload"]) => Promise<string>;
+  addToQueue: (payload: QueuePayload) => Promise<{ id: string; duplicate?: DuplicateWarning }>;
   retryAll: (token: string) => Promise<void>;
   clearSynced: () => Promise<void>;
 }
@@ -39,6 +50,11 @@ async function loadQueue(): Promise<QueueItem[]> {
   try { return JSON.parse(raw) as QueueItem[]; } catch { return []; }
 }
 
+/** Returns true if two coordinates are within 0.001° (~100 m) of each other. */
+function nearbyCoords(a: { lat: number; lon: number }, b: { lat: number; lon: number }): boolean {
+  return Math.abs(a.lat - b.lat) < 0.001 && Math.abs(a.lon - b.lon) < 0.001;
+}
+
 export function OfflineQueueProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const queueRef = useRef<QueueItem[]>([]);
@@ -53,11 +69,29 @@ export function OfflineQueueProvider({ children }: { children: React.ReactNode }
     await persistQueue(newQ);
   }, []);
 
-  const addToQueue = useCallback(async (payload: QueueItem["payload"]): Promise<string> => {
+  const addToQueue = useCallback(async (payload: QueuePayload): Promise<{ id: string; duplicate?: DuplicateWarning }> => {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const duplicate = queueRef.current.find(item => {
+      if (item.status === "synced") return false;
+      if (item.payload.category !== payload.category) return false;
+      if (new Date(item.createdAt).getTime() < fiveMinutesAgo) return false;
+      return nearbyCoords(item.payload, payload);
+    });
+
+    if (duplicate) {
+      return {
+        id: duplicate.id,
+        duplicate: {
+          message: "A similar report was already submitted within the last 5 minutes for this location.",
+          existingId: duplicate.id,
+        },
+      };
+    }
+
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const item: QueueItem = { id, createdAt: new Date().toISOString(), status: "pending", payload };
     await updateQueue([...queueRef.current, item]);
-    return id;
+    return { id };
   }, [updateQueue]);
 
   const retryAll = useCallback(async (token: string) => {
@@ -77,6 +111,10 @@ export function OfflineQueueProvider({ children }: { children: React.ReactNode }
         formData.append("lon", String(item.payload.lon));
         formData.append("report_text", item.payload.reportText);
         formData.append("category", item.payload.category);
+        if (item.payload.phone_primary) formData.append("phone_primary", item.payload.phone_primary);
+        if (item.payload.phone_secondary) formData.append("phone_secondary", item.payload.phone_secondary);
+        if (item.payload.address_details) formData.append("address_details", item.payload.address_details);
+        if (item.payload.location_source) formData.append("location_source", item.payload.location_source);
         if (item.payload.imageUri) {
           const ext = item.payload.imageUri.split(".").pop() ?? "jpg";
           formData.append("image", { uri: item.payload.imageUri, name: `photo.${ext}`, type: `image/${ext}` } as unknown as Blob);
