@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, lt, not, inArray, or } from "drizzle-orm";
-import { db, incidentsTable } from "@workspace/db";
+import { and, desc, eq, lt, not, inArray } from "drizzle-orm";
+import { db, incidentsTable, usersTable } from "@workspace/db";
 import { requireAuth, requireSupervisor, type AuthedRequest } from "../lib/auth";
 import { reportDict } from "../lib/serialize";
 
@@ -32,6 +32,26 @@ async function markOverdueIncidents(): Promise<void> {
     );
 }
 
+/** LEFT JOIN incidents with users and return combined rows */
+async function fetchIncidentsWithReporter() {
+  return db
+    .select({ incident: incidentsTable, reporter_username: usersTable.username })
+    .from(incidentsTable)
+    .leftJoin(usersTable, eq(incidentsTable.userId, usersTable.id))
+    .orderBy(
+      desc(incidentsTable.escalationRequired),
+      desc(incidentsTable.severity),
+      desc(incidentsTable.createdAt),
+    );
+}
+
+function enrichedReportDict(
+  incident: typeof incidentsTable.$inferSelect,
+  reporterUsername: string | null,
+): Record<string, unknown> {
+  return { ...reportDict(incident), reporter_username: reporterUsername };
+}
+
 /** GET /api/supervisor/dashboard */
 router.get(
   "/supervisor/dashboard",
@@ -40,29 +60,29 @@ router.get(
   async (_req: Request, res: Response) => {
     await markOverdueIncidents();
 
-    const rows = await db.select().from(incidentsTable).orderBy(desc(incidentsTable.createdAt));
+    const allRows = await fetchIncidentsWithReporter();
 
     const counts: Record<string, number> = {};
     let criticalCount = 0;
     let lateCount = 0;
 
-    for (const r of rows) {
+    for (const { incident: r } of allRows) {
       const s = r.status ?? "pending_review";
       counts[s] = (counts[s] ?? 0) + 1;
-      if ((r.severity ?? 0) >= 5) criticalCount++;
+      if ((r.severity ?? 0) >= 7) criticalCount++;
       if (s === "late") lateCount++;
     }
 
-    const activeIncidents = rows
-      .filter((r) => ACTIVE_STATUSES.includes(r.status ?? "pending_review"))
+    const activeIncidents = allRows
+      .filter(({ incident: r }) => ACTIVE_STATUSES.includes(r.status ?? "pending_review"))
       .slice(0, 20)
-      .map(reportDict);
+      .map(({ incident, reporter_username }) => enrichedReportDict(incident, reporter_username));
 
     res.json({
       counts,
       critical_count: criticalCount,
       late_count: lateCount,
-      total: rows.length,
+      total: allRows.length,
       active_incidents: activeIncidents,
     });
   },
@@ -78,29 +98,37 @@ router.get(
 
     const q = req.query as Record<string, string | undefined>;
     const statusFilter = q["status"];
-    const severityFilter = q["severity"] ? Number(q["severity"]) : undefined;
+    const severityMin = q["severity_min"] ? Number(q["severity_min"]) : undefined;
+    const severityMax = q["severity_max"] ? Number(q["severity_max"]) : undefined;
     const lateOnly = q["late_only"] === "true";
     const categoryFilter = q["category"];
+    const dateFrom = q["date_from"] ? new Date(q["date_from"]) : undefined;
 
-    let rows = await db
-      .select()
-      .from(incidentsTable)
-      .orderBy(desc(incidentsTable.escalationRequired), desc(incidentsTable.severity), desc(incidentsTable.createdAt));
+    let rows = await fetchIncidentsWithReporter();
 
     if (statusFilter && statusFilter !== "all") {
-      rows = rows.filter((r) => r.status === statusFilter);
+      rows = rows.filter(({ incident: r }) => r.status === statusFilter);
     }
-    if (severityFilter !== undefined && !Number.isNaN(severityFilter)) {
-      rows = rows.filter((r) => r.severity === severityFilter);
+    if (severityMin !== undefined && !Number.isNaN(severityMin)) {
+      rows = rows.filter(({ incident: r }) => (r.severity ?? 0) >= severityMin);
+    }
+    if (severityMax !== undefined && !Number.isNaN(severityMax)) {
+      rows = rows.filter(({ incident: r }) => (r.severity ?? 0) <= severityMax);
     }
     if (lateOnly) {
-      rows = rows.filter((r) => r.status === "late");
+      rows = rows.filter(({ incident: r }) => r.status === "late");
     }
     if (categoryFilter && categoryFilter !== "all") {
-      rows = rows.filter((r) => r.threatClass === categoryFilter);
+      rows = rows.filter(({ incident: r }) => r.threatClass === categoryFilter);
+    }
+    if (dateFrom && !Number.isNaN(dateFrom.getTime())) {
+      rows = rows.filter(({ incident: r }) => r.createdAt && r.createdAt >= dateFrom);
     }
 
-    res.json({ reports: rows.map(reportDict), total: rows.length });
+    res.json({
+      reports: rows.map(({ incident, reporter_username }) => enrichedReportDict(incident, reporter_username)),
+      total: rows.length,
+    });
   },
 );
 
@@ -169,7 +197,12 @@ router.patch(
       .where(eq(incidentsTable.id, incidentId))
       .returning();
 
-    res.json(reportDict(updated[0]!));
+    // Fetch reporter username for the response
+    const reporterRow = updated[0]?.userId
+      ? await db.select({ username: usersTable.username }).from(usersTable).where(eq(usersTable.id, updated[0].userId)).limit(1)
+      : [];
+
+    res.json(enrichedReportDict(updated[0]!, reporterRow[0]?.username ?? null));
   },
 );
 
@@ -202,7 +235,11 @@ router.patch(
       return;
     }
 
-    res.json(reportDict(updated[0]));
+    const reporterRow = updated[0]?.userId
+      ? await db.select({ username: usersTable.username }).from(usersTable).where(eq(usersTable.id, updated[0].userId)).limit(1)
+      : [];
+
+    res.json(enrichedReportDict(updated[0], reporterRow[0]?.username ?? null));
   },
 );
 

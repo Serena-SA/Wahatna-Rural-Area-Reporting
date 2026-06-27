@@ -55,6 +55,7 @@ interface Report {
   created_at: string | null;
   updated_at: string | null;
   escalation_required: boolean;
+  reporter_username: string | null;
 }
 
 interface DashboardData {
@@ -122,9 +123,12 @@ function slaInfo(
   overdueLabel: string,
   timeH: string,
   timeM: string,
+  createdAt?: string | null,
 ): { label: string; color: string; urgency: "ok" | "amber" | "red" } {
   if (!dueAt) return { label: "", color: "#6B7280", urgency: "ok" };
-  const diff = new Date(dueAt).getTime() - Date.now();
+  const now = Date.now();
+  const due = new Date(dueAt).getTime();
+  const diff = due - now;
   if (diff <= 0) {
     const over = Math.abs(diff);
     const h = Math.floor(over / 3600000);
@@ -133,7 +137,9 @@ function slaInfo(
   }
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  const urgency = diff < 18 * 3600000 ? "amber" : "ok";
+  // Amber when <25% of the SLA window remains; fall back to <18 h if no createdAt
+  const windowMs = createdAt ? due - new Date(createdAt).getTime() : 72 * 3600000;
+  const urgency = windowMs > 0 && diff / windowMs < 0.25 ? "amber" : "ok";
   return {
     label: `${dueInLabel} ${h}${timeH} ${m}${timeM}`,
     color: urgency === "amber" ? "#D97706" : "#16A34A",
@@ -385,7 +391,7 @@ function ReportCard({
     setNotesText(report.supervisor_notes ?? "");
   }, [report.status, report.rejection_reason, report.supervisor_notes]);
 
-  const sla = slaInfo(report.due_at, t("sup_due_in"), t("sup_overdue"), t("time_h"), t("time_m"));
+  const sla = slaInfo(report.due_at, t("sup_due_in"), t("sup_overdue"), t("time_h"), t("time_m"), report.created_at);
   const imgUrl = getImageUrl(report.image_url);
 
   async function handleStatusUpdate() {
@@ -480,6 +486,7 @@ function ReportCard({
       </Text>
       <Text style={[styles.cardMeta, { color: colors.mutedForeground, textAlign }]}>
         {formatDateTime(report.created_at, isRTL)}
+        {report.reporter_username ? `  ·  ${t("sup_reporter")}: ${report.reporter_username}` : ""}
       </Text>
 
       {/* Thumbnail */}
@@ -677,6 +684,19 @@ export default function SupervisorScreen() {
         const apiStatus = statsChip ?? (statusFilter !== "all" ? statusFilter : undefined);
         if (apiStatus && apiStatus !== "all" && apiStatus !== "critical") params.set("status", apiStatus);
         if (lateOnly) params.set("late_only", "true");
+        // Severity range → server-side filter
+        if (sevFilter === "low")      { params.set("severity_min", "0");  params.set("severity_max", "2"); }
+        if (sevFilter === "medium")   { params.set("severity_min", "3");  params.set("severity_max", "4"); }
+        if (sevFilter === "high")     { params.set("severity_min", "5");  params.set("severity_max", "6"); }
+        if (sevFilter === "critical") { params.set("severity_min", "7");  params.set("severity_max", "10"); }
+        // Date range → server-side filter
+        if (dateFilter === "today") {
+          const from = new Date(); from.setHours(0, 0, 0, 0);
+          params.set("date_from", from.toISOString());
+        } else if (dateFilter === "this_week") {
+          const from = new Date(); from.setDate(from.getDate() - from.getDay()); from.setHours(0, 0, 0, 0);
+          params.set("date_from", from.toISOString());
+        }
 
         const [dash, rpts] = await Promise.all([
           apiGet<DashboardData>("/supervisor/dashboard", token),
@@ -694,7 +714,7 @@ export default function SupervisorScreen() {
         setRefreshing(false);
       }
     },
-    [isSupervisor, token, statusFilter, lateOnly, statsChip],
+    [isSupervisor, token, statusFilter, lateOnly, statsChip, sevFilter, dateFilter],
   );
 
   useFocusEffect(
@@ -711,7 +731,7 @@ export default function SupervisorScreen() {
   useEffect(() => {
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, lateOnly, statsChip]);
+  }, [statusFilter, lateOnly, statsChip, sevFilter, dateFilter]);
 
   function handleUpdated(updated: Report) {
     setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
