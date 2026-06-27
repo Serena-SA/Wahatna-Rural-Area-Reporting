@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "7ggq4292KzhNamWIrIbrD"
+uri = "file://docs/WAHATNA_HANDOVER.md"
+type = "text"
+title = "Wahatna Handover — Markdown"
+
+[[outputs]]
+id = "vQK-x4TBSR5UbO2e8pWHw"
+uri = "file://docs/WAHATNA_HANDOVER.docx"
+type = "word_document"
+title = "Wahatna Handover — Word Document"
