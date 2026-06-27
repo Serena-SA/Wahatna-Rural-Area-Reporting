@@ -58,26 +58,40 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ── Report (users) / Reports list (supervisors) ─────── */}
+      {/* ── Report — community reporter submission (users only) ─ */}
       <Tabs.Screen
         name="report"
-        options={{
-          title: isSupervisor ? t("nav_reports") : t("nav_report"),
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView
-                name={isSupervisor ? "list.bullet.clipboard" : "exclamationmark.triangle"}
-                tintColor={color}
-                size={22}
-              />
-            ) : (
-              <Feather
-                name={isSupervisor ? "clipboard" : "alert-triangle"}
-                size={22}
-                color={color}
-              />
-            ),
-        }}
+        options={
+          isSupervisor
+            ? { href: null, title: "Report" }
+            : {
+                title: t("nav_report"),
+                tabBarIcon: ({ color }) =>
+                  isIOS ? (
+                    <SymbolView name="exclamationmark.triangle" tintColor={color} size={22} />
+                  ) : (
+                    <Feather name="alert-triangle" size={22} color={color} />
+                  ),
+              }
+        }
+      />
+
+      {/* ── Reports list — supervisor incident list (supervisors only) */}
+      <Tabs.Screen
+        name="reports"
+        options={
+          isSupervisor
+            ? {
+                title: t("nav_reports"),
+                tabBarIcon: ({ color }) =>
+                  isIOS ? (
+                    <SymbolView name="list.bullet.clipboard" tintColor={color} size={22} />
+                  ) : (
+                    <Feather name="clipboard" size={22} color={color} />
+                  ),
+              }
+            : { href: null, title: "Reports" }
+        }
       />
 
       {/* ── My Reports (users only) ─────────────────────────── */}
@@ -85,7 +99,7 @@ export default function TabLayout() {
         name="my-reports"
         options={
           isSupervisor
-            ? { href: null }
+            ? { href: null, title: "My Reports" }
             : {
                 title: t("nav_my_reports"),
                 tabBarIcon: ({ color }) =>
@@ -112,13 +126,13 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ── Dashboard (hide from tabs — kept for deep-link compat) */}
+      {/* ── Dashboard (legacy — hidden, kept for deep-link compat) */}
       <Tabs.Screen
         name="dashboard"
         options={{ href: null, title: "Dashboard" }}
       />
 
-      {/* ── Supervisor (supervisor only) ─────────────────────── */}
+      {/* ── Supervisor (supervisors only) ───────────────────── */}
       <Tabs.Screen
         name="supervisor"
         options={

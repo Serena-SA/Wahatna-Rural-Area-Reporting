@@ -1,12 +1,13 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useTranslation } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { router } from "expo-router";
+import { Pressable } from "react-native";
 
-export default function SupervisorScreen() {
+export default function SupervisorReportsScreen() {
   const colors = useColors();
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -16,12 +17,7 @@ export default function SupervisorScreen() {
   if (!isSupervisor) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="lock" size={40} color={colors.mutedForeground} />
           <Text style={[styles.heading, { color: colors.text }]}>
             {t("sup_access_restricted")}
@@ -41,20 +37,16 @@ export default function SupervisorScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.heading, { color: colors.text }]}>
-        {t("sup_title")}
+      <ActivityIndicator color={colors.primary} />
+      <Text style={[styles.label, { color: colors.mutedForeground }]}>
+        {t("my_reports_loading")}
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   card: {
     width: "100%",
     maxWidth: 360,
@@ -70,12 +62,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   heading: { fontSize: 20, fontWeight: "700" as const, textAlign: "center" },
-  sub: { fontSize: 14, textAlign: "center" },
-  btn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-  },
+  label: { fontSize: 14 },
+  btn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
   btnText: { fontWeight: "600" as const, fontSize: 14 },
 });
