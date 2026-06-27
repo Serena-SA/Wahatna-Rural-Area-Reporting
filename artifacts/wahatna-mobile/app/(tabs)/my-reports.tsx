@@ -118,12 +118,13 @@ function StatusChangeBanner({ report, onDismiss, colors, isRTL }: {
   isRTL: boolean;
 }) {
   const anim = useRef(new Animated.Value(0)).current;
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (report) {
       Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 18 }).start();
-      const t = setTimeout(onDismiss, 4000);
-      return () => clearTimeout(t);
+      const timer = setTimeout(onDismiss, 4000);
+      return () => clearTimeout(timer);
     } else {
       Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     }
@@ -141,7 +142,7 @@ function StatusChangeBanner({ report, onDismiss, colors, isRTL }: {
       <View style={[styles.changeBannerInner, { flexDirection: row }]}>
         <Feather name="info" size={14} color="#2563EB" />
         <Text style={[styles.changeBannerText, { color: "#2563EB" }]}>
-          {report.reference} — status updated
+          {report.reference} — {t("my_reports_status_changed")}
         </Text>
         <Pressable onPress={onDismiss} style={styles.bannerClose}>
           <Feather name="x" size={14} color="#2563EB" />
@@ -164,6 +165,7 @@ function ReportDetail({
   isRTL: boolean;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
 }) {
+  const { t } = useTranslation();
   const textAlign: "left" | "right" = isRTL ? "right" : "left";
   const row: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
 
@@ -199,7 +201,7 @@ function ReportDetail({
         <View style={[styles.notesBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
           <View style={[styles.notesHeader, { flexDirection: row }]}>
             <Feather name="message-square" size={13} color={colors.primary} style={isRTL ? styles.iconRTL : styles.iconLTR} />
-            <Text style={[styles.notesTitle, { color: colors.primary }]}>Supervisor Notes</Text>
+            <Text style={[styles.notesTitle, { color: colors.primary }]}>{t("my_reports_supervisor_notes")}</Text>
           </View>
           <Text style={[styles.notesText, { color: colors.text, textAlign }]}>{report.supervisor_notes}</Text>
         </View>
@@ -209,7 +211,7 @@ function ReportDetail({
       {report.status_history && report.status_history.length > 0 && (
         <View style={styles.timeline}>
           <Text style={[styles.timelineTitle, { color: colors.mutedForeground, textAlign }]}>
-            Timeline
+            {t("my_reports_timeline")}
           </Text>
           {[...report.status_history].reverse().map((entry, i) => {
             const s = statusConfig[entry.status] ?? { color: "#6B7280", label: entry.status };
@@ -256,6 +258,7 @@ function ReportCard({
   isRTL: boolean;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
 }) {
+  const { t } = useTranslation();
   const textAlign: "left" | "right" = isRTL ? "right" : "left";
   const row: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
   const icon = catIcon(report.threat_class);
@@ -299,6 +302,14 @@ function ReportCard({
             <Feather name="map-pin" size={10} color={colors.mutedForeground} />
             <Text style={[styles.locChipText, { color: colors.mutedForeground }]}>
               {report.location_source.toUpperCase()}
+            </Text>
+          </View>
+        )}
+        {report.image_filename && (
+          <View style={[styles.locChip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+            <Feather name="camera" size={10} color={colors.mutedForeground} />
+            <Text style={[styles.locChipText, { color: colors.mutedForeground }]}>
+              {t("my_reports_photos_attached")}
             </Text>
           </View>
         )}

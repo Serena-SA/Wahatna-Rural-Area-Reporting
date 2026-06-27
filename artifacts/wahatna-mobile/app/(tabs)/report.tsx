@@ -26,12 +26,13 @@ import { useTranslation } from "@/context/LanguageContext";
 import { useOfflineQueue } from "@/context/OfflineQueueContext";
 import { useNetworkState } from "@/hooks/useNetworkState";
 import { useColors } from "@/hooks/useColors";
+import { RouteMap } from "@/components/RouteMap";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
 type WizardStep = 1 | 2 | 3 | 4;
 type Phase = "wizard" | "submitting" | "confirmed";
-type LocationSource = "gps" | "address";
+type LocationSource = "gps" | "address" | "pin";
 type GpsState = "idle" | "fetching" | "ok" | "denied";
 
 interface SubmitResult {
@@ -102,6 +103,8 @@ export default function ReportScreen() {
   const [gpsState, setGpsState] = useState<GpsState>("idle");
   const [gpsLat, setGpsLat] = useState<number | null>(null);
   const [gpsLon, setGpsLon] = useState<number | null>(null);
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLon, setPinLon] = useState<number | null>(null);
   const [addressText, setAddressText] = useState("");
   const [addressResults, setAddressResults] = useState<GeoResult[]>([]);
   const [selectedGeo, setSelectedGeo] = useState<GeoResult | null>(null);
@@ -128,7 +131,7 @@ export default function ReportScreen() {
   async function tryGPS() {
     if (Platform.OS === "web") {
       setGpsState("denied");
-      setLocationSource("address");
+      if (locationSource === "gps") setLocationSource("address");
       return;
     }
     setGpsState("fetching");
@@ -136,7 +139,7 @@ export default function ReportScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setGpsState("denied");
-        setLocationSource("address");
+        if (locationSource === "gps") setLocationSource("address");
         return;
       }
       const pos = await Location.getCurrentPositionAsync({
@@ -145,10 +148,10 @@ export default function ReportScreen() {
       setGpsLat(pos.coords.latitude);
       setGpsLon(pos.coords.longitude);
       setGpsState("ok");
-      setLocationSource("gps");
+      if (locationSource !== "pin") setLocationSource("gps");
     } catch {
       setGpsState("denied");
-      setLocationSource("address");
+      if (locationSource === "gps") setLocationSource("address");
     }
   }
 
@@ -202,8 +205,8 @@ export default function ReportScreen() {
       if (!phonePrimary.trim()) return t("report_phone_primary") + " required";
     }
     if (s === 2) {
-      const lat = locationSource === "gps" ? gpsLat : selectedGeo?.lat ?? null;
-      const lon = locationSource === "gps" ? gpsLon : selectedGeo?.lon ?? null;
+      const lat = locationSource === "gps" ? gpsLat : locationSource === "pin" ? pinLat : selectedGeo?.lat ?? null;
+      const lon = locationSource === "gps" ? gpsLon : locationSource === "pin" ? pinLon : selectedGeo?.lon ?? null;
       if (lat == null || lon == null) return t("err_location");
     }
     return null;
@@ -226,14 +229,14 @@ export default function ReportScreen() {
     setError("");
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    const lat = locationSource === "gps" ? gpsLat! : selectedGeo!.lat;
-    const lon = locationSource === "gps" ? gpsLon! : selectedGeo!.lon;
+    const lat = locationSource === "gps" ? gpsLat! : locationSource === "pin" ? pinLat! : selectedGeo!.lat;
+    const lon = locationSource === "gps" ? gpsLon! : locationSource === "pin" ? pinLon! : selectedGeo!.lon;
     const addrDetails = locationSource === "address"
       ? (selectedGeo?.address ?? addressText)
       : undefined;
 
     if (!isOnline) {
-      const { duplicate } = await addToQueue({
+      const queuePayload = {
         lat,
         lon,
         reportText: description.trim(),
@@ -243,7 +246,8 @@ export default function ReportScreen() {
         phone_secondary: phoneSecondary.trim() || undefined,
         address_details: addrDetails,
         location_source: locationSource,
-      });
+      };
+      const { duplicate } = await addToQueue(queuePayload);
 
       if (duplicate) {
         Alert.alert(
@@ -253,8 +257,8 @@ export default function ReportScreen() {
             { text: t("report_back"), style: "cancel" },
             {
               text: t("report_submit"),
-              onPress: () => {
-                setSubmitResult(null);
+              onPress: async () => {
+                await addToQueue(queuePayload, { force: true });
                 setPhase("confirmed");
               },
             },
@@ -324,6 +328,8 @@ export default function ReportScreen() {
     setGpsState("idle");
     setGpsLat(null);
     setGpsLon(null);
+    setPinLat(null);
+    setPinLon(null);
     setAddressText("");
     setAddressResults([]);
     setSelectedGeo(null);
@@ -567,7 +573,7 @@ export default function ReportScreen() {
           <>
             {/* Source toggle */}
             <View style={[styles.sourceToggle, { flexDirection: row }]}>
-              {(["gps", "address"] as LocationSource[]).map(src => (
+              {(["gps", "pin", "address"] as LocationSource[]).map(src => (
                 <Pressable
                   key={src}
                   onPress={() => setLocationSource(src)}
@@ -582,7 +588,7 @@ export default function ReportScreen() {
                   ]}
                 >
                   <Feather
-                    name={src === "gps" ? "map-pin" : "search"}
+                    name={src === "gps" ? "map-pin" : src === "pin" ? "crosshair" : "search"}
                     size={14}
                     color={locationSource === src ? colors.primaryForeground : colors.mutedForeground}
                   />
@@ -592,7 +598,7 @@ export default function ReportScreen() {
                       { color: locationSource === src ? colors.primaryForeground : colors.mutedForeground },
                     ]}
                   >
-                    {src === "gps" ? t("loc_source_gps") : t("loc_source_address")}
+                    {src === "gps" ? t("loc_source_gps") : src === "pin" ? t("loc_source_pin") : t("loc_source_address")}
                   </Text>
                 </Pressable>
               ))}
@@ -721,6 +727,47 @@ export default function ReportScreen() {
                         {selectedGeo.lat.toFixed(4)}, {selectedGeo.lon.toFixed(4)}
                       </Text>
                     </View>
+                  </View>
+                )}
+              </GlassCard>
+            )}
+
+            {/* Pin panel */}
+            {locationSource === "pin" && (
+              <GlassCard padding={16} style={{ gap: 12 }}>
+                <Text style={[styles.label, { color: colors.mutedForeground, textAlign }]}>
+                  {t("loc_override_pin")}
+                </Text>
+                <RouteMap
+                  points={gpsLat != null && gpsLon != null ? [{ lat: gpsLat, lon: gpsLon, label: t("loc_using_gps"), kind: "stop" as const }] : []}
+                  height={220}
+                  pinDropEnabled
+                  pinMarker={pinLat != null && pinLon != null ? { lat: pinLat, lon: pinLon } : undefined}
+                  initialCenter={
+                    gpsLat != null && gpsLon != null
+                      ? { lat: gpsLat, lon: gpsLon, zoom: 14 }
+                      : { lat: 24.08, lon: 55.79, zoom: 10 }
+                  }
+                  onPinDrop={(lat, lon) => { setPinLat(lat); setPinLon(lon); }}
+                />
+                {pinLat != null && pinLon != null ? (
+                  <View style={[styles.gpsOk, { flexDirection: row }]}>
+                    <Feather name="check-circle" size={16} color={colors.success} />
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                      <Text style={[styles.gpsOkText, { color: colors.text, textAlign }]}>
+                        {t("loc_source_pin")}
+                      </Text>
+                      <Text style={[styles.gpsCoords, { color: colors.mutedForeground, textAlign }]}>
+                        {pinLat.toFixed(5)}, {pinLon.toFixed(5)}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[styles.gpsFetching, { flexDirection: row }]}>
+                    <Feather name="crosshair" size={16} color={colors.mutedForeground} />
+                    <Text style={[styles.gpsText, { color: colors.mutedForeground }]}>
+                      {t("loc_override_pin")}
+                    </Text>
                   </View>
                 )}
               </GlassCard>

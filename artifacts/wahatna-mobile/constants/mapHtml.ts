@@ -75,10 +75,17 @@ export function mapThemeFromColors(c: MapPalette, mode: "light" | "dark"): MapTh
   };
 }
 
+export interface MapPinDropOptions {
+  pinDropEnabled?: boolean;
+  pinMarker?: { lat: number; lon: number };
+  initialCenter?: { lat: number; lon: number; zoom?: number };
+}
+
 export function buildMapHtml(
   points: MapPoint[],
   routeCoords: [number, number][],
-  theme: MapTheme = DARK_THEME
+  theme: MapTheme = DARK_THEME,
+  pinOpts: MapPinDropOptions = {}
 ): string {
   const pts = safeJson(points ?? []);
   const route = safeJson(routeCoords ?? []);
@@ -115,7 +122,7 @@ export function buildMapHtml(
 <script>
   var points = ${pts};
   var route = ${route};
-  var map = L.map('map', { zoomControl: true, attributionControl: true }).setView([24.2, 54.4], 7);
+  var map = L.map('map', { zoomControl: true, attributionControl: true }).setView([${pinOpts.initialCenter ? `${pinOpts.initialCenter.lat}, ${pinOpts.initialCenter.lon}` : "24.2, 54.4"}], ${pinOpts.initialCenter?.zoom ?? 7});
   L.tileLayer('${tileUrl}', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap &copy; CARTO'
@@ -147,6 +154,21 @@ export function buildMapHtml(
   } else if (bounds.length > 1) {
     map.fitBounds(bounds, { padding: [44, 44], maxZoom: 14 });
   }
+  ${pinOpts.pinDropEnabled ? `
+  var _pinMk = null;
+  ${pinOpts.pinMarker ? `_pinMk = L.circleMarker([${pinOpts.pinMarker.lat}, ${pinOpts.pinMarker.lon}], { radius: 13, color: '${theme.destination}', weight: 3, fillColor: '${theme.destination}', fillOpacity: 0.5 }).addTo(map);` : ""}
+  map.getContainer().style.cursor = 'crosshair';
+  map.on('click', function(e) {
+    if (_pinMk) map.removeLayer(_pinMk);
+    _pinMk = L.circleMarker([e.latlng.lat, e.latlng.lng], { radius: 13, color: '${theme.destination}', weight: 3, fillColor: '${theme.destination}', fillOpacity: 0.5 }).addTo(map);
+    var _msg = JSON.stringify({ type: 'pinDrop', lat: e.latlng.lat, lon: e.latlng.lng });
+    if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(_msg);
+    } else {
+      try { window.parent.postMessage(_msg, '*'); } catch(_e) {}
+    }
+  });
+  ` : ""}
 </script>
 </body>
 </html>`;

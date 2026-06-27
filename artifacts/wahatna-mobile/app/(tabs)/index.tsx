@@ -208,10 +208,10 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text style={[styles.heatTitle, { color: "#D97706", textAlign }]}>
-                  {t("heat_ban_active")}
+                  {t("home_heat_ban_title")}
                 </Text>
                 <Text style={[styles.heatBody, { color: colors.mutedForeground, textAlign }]}>
-                  {t("heat_ban_body")}
+                  {t("home_heat_ban_body")}
                 </Text>
               </View>
             </View>

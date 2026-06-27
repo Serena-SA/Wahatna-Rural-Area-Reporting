@@ -109,6 +109,9 @@ export interface Translations {
   my_reports_loading: string;
   my_reports_updated: string;
   my_reports_status_changed: string; // "Status updated to {status}"
+  my_reports_supervisor_notes: string;
+  my_reports_timeline: string;
+  my_reports_photos_attached: string;
 
   // ── Status labels ──────────────────────────────────────────────
   status_pending_review: string;
@@ -287,6 +290,9 @@ const en: Translations = {
   my_reports_loading: "Loading reports…",
   my_reports_updated: "Reports updated",
   my_reports_status_changed: "Status updated",
+  my_reports_supervisor_notes: "Supervisor Notes",
+  my_reports_timeline: "Timeline",
+  my_reports_photos_attached: "Photo attached",
 
   status_pending_review: "Pending Review",
   status_under_review: "Under Review",
@@ -459,6 +465,9 @@ const ar: Translations = {
   my_reports_loading: "جارٍ التحميل…",
   my_reports_updated: "تم تحديث البلاغات",
   my_reports_status_changed: "تم تحديث الحالة",
+  my_reports_supervisor_notes: "ملاحظات المشرف",
+  my_reports_timeline: "الجدول الزمني",
+  my_reports_photos_attached: "تم إرفاق صورة",
 
   status_pending_review: "قيد المراجعة",
   status_under_review: "تحت المراجعة",
@@ -631,6 +640,9 @@ const ur: Translations = {
   my_reports_loading: "رپورٹیں لوڈ ہو رہی ہیں…",
   my_reports_updated: "رپورٹیں اپ ڈیٹ",
   my_reports_status_changed: "حیثیت اپ ڈیٹ",
+  my_reports_supervisor_notes: "نگران نوٹس",
+  my_reports_timeline: "ٹائم لائن",
+  my_reports_photos_attached: "تصویر منسلک",
 
   status_pending_review: "جائزے کا انتظار",
   status_under_review: "زیر جائزہ",
@@ -803,6 +815,9 @@ const hi: Translations = {
   my_reports_loading: "रिपोर्ट लोड हो रही हैं…",
   my_reports_updated: "रिपोर्ट अपडेट",
   my_reports_status_changed: "स्थिति अपडेट",
+  my_reports_supervisor_notes: "पर्यवेक्षक नोट्स",
+  my_reports_timeline: "टाइमलाइन",
+  my_reports_photos_attached: "फ़ोटो संलग्न",
 
   status_pending_review: "समीक्षा प्रतीक्षित",
   status_under_review: "समीक्षाधीन",

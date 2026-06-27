@@ -33,7 +33,7 @@ interface DuplicateWarning {
 interface OfflineQueueContextValue {
   queue: QueueItem[];
   pendingCount: number;
-  addToQueue: (payload: QueuePayload) => Promise<{ id: string; duplicate?: DuplicateWarning }>;
+  addToQueue: (payload: QueuePayload, opts?: { force?: boolean }) => Promise<{ id: string; duplicate?: DuplicateWarning }>;
   retryAll: (token: string) => Promise<void>;
   clearSynced: () => Promise<void>;
 }
@@ -69,23 +69,25 @@ export function OfflineQueueProvider({ children }: { children: React.ReactNode }
     await persistQueue(newQ);
   }, []);
 
-  const addToQueue = useCallback(async (payload: QueuePayload): Promise<{ id: string; duplicate?: DuplicateWarning }> => {
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    const duplicate = queueRef.current.find(item => {
-      if (item.status === "synced") return false;
-      if (item.payload.category !== payload.category) return false;
-      if (new Date(item.createdAt).getTime() < fiveMinutesAgo) return false;
-      return nearbyCoords(item.payload, payload);
-    });
+  const addToQueue = useCallback(async (payload: QueuePayload, opts?: { force?: boolean }): Promise<{ id: string; duplicate?: DuplicateWarning }> => {
+    if (!opts?.force) {
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      const duplicate = queueRef.current.find(item => {
+        if (item.status === "synced") return false;
+        if (item.payload.category !== payload.category) return false;
+        if (new Date(item.createdAt).getTime() < fiveMinutesAgo) return false;
+        return nearbyCoords(item.payload, payload);
+      });
 
-    if (duplicate) {
-      return {
-        id: duplicate.id,
-        duplicate: {
-          message: "A similar report was already submitted within the last 5 minutes for this location.",
-          existingId: duplicate.id,
-        },
-      };
+      if (duplicate) {
+        return {
+          id: duplicate.id,
+          duplicate: {
+            message: "A similar report was already submitted within the last 5 minutes for this location.",
+            existingId: duplicate.id,
+          },
+        };
+      }
     }
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
