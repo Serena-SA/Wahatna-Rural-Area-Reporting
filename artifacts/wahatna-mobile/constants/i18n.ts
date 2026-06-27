@@ -182,6 +182,16 @@ export interface Translations {
   fleet_priority_high: string;
   fleet_priority_critical: string;
   fleet_priority_note: string;
+  fleet_gps_denied: string;
+  fleet_gps_instructions: string;
+  fleet_manual_lat: string;
+  fleet_manual_lon: string;
+  fleet_no_results: string;
+  fleet_priority: string;
+  fleet_min_waypoints: string;
+  fleet_no_start: string;
+  fleet_min_unit: string;
+  fleet_remove: string;
 
   // ── Heat ban ───────────────────────────────────────────────────
   heat_ban_title: string;
@@ -374,6 +384,16 @@ const en: Translations = {
   fleet_priority_high: "High",
   fleet_priority_critical: "Critical",
   fleet_priority_note: "Critical stop was moved to front due to high priority",
+  fleet_gps_denied: "Location access denied",
+  fleet_gps_instructions: "Open Settings and allow Location access for this app.",
+  fleet_manual_lat: "Latitude",
+  fleet_manual_lon: "Longitude",
+  fleet_no_results: "No places found",
+  fleet_priority: "Priority",
+  fleet_min_waypoints: "Add at least one destination waypoint",
+  fleet_no_start: "Start location unavailable",
+  fleet_min_unit: "min",
+  fleet_remove: "Remove",
 
   heat_ban_title: "Heat Work Ban",
   heat_ban_body: "MOHRE ban: outdoor work prohibited 12:30–15:00 (15 Jun – 15 Sep).",
@@ -563,6 +583,16 @@ const ar: Translations = {
   fleet_priority_high: "عالٍ",
   fleet_priority_critical: "حرج",
   fleet_priority_note: "تم تقديم المحطة الحرجة بسبب الأولوية العالية",
+  fleet_gps_denied: "تم رفض الوصول إلى الموقع",
+  fleet_gps_instructions: "افتح الإعدادات واسمح بالوصول إلى الموقع لهذا التطبيق.",
+  fleet_manual_lat: "خط العرض",
+  fleet_manual_lon: "خط الطول",
+  fleet_no_results: "لم يتم العثور على أماكن",
+  fleet_priority: "الأولوية",
+  fleet_min_waypoints: "أضف نقطة وجهة واحدة على الأقل",
+  fleet_no_start: "موقع البداية غير متاح",
+  fleet_min_unit: "دقيقة",
+  fleet_remove: "إزالة",
 
   heat_ban_title: "حظر العمل في الحر",
   heat_ban_body: "حظر وزارة الموارد البشرية: العمل في الخارج ممنوع 12:30–15:00 (15 يونيو–15 سبتمبر).",
@@ -752,6 +782,16 @@ const ur: Translations = {
   fleet_priority_high: "زیادہ",
   fleet_priority_critical: "نازک",
   fleet_priority_note: "اعلی ترجیح کی وجہ سے نازک اسٹاپ آگے کیا گیا",
+  fleet_gps_denied: "مقام تک رسائی سے انکار کیا گیا",
+  fleet_gps_instructions: "ترتیبات کھولیں اور اس ایپ کے لیے مقام کی رسائی دیں۔",
+  fleet_manual_lat: "عرض البلد",
+  fleet_manual_lon: "طول البلد",
+  fleet_no_results: "کوئی جگہ نہیں ملی",
+  fleet_priority: "ترجیح",
+  fleet_min_waypoints: "کم از کم ایک منزل کا نقطہ شامل کریں",
+  fleet_no_start: "آغاز کا مقام دستیاب نہیں",
+  fleet_min_unit: "منٹ",
+  fleet_remove: "ہٹائیں",
 
   heat_ban_title: "گرمی کام پابندی",
   heat_ban_body: "MOHRE پابندی: 12:30–15:00 بیرونی کام ممنوع (15 جون–15 ستمبر)۔",
@@ -941,6 +981,16 @@ const hi: Translations = {
   fleet_priority_high: "उच्च",
   fleet_priority_critical: "गंभीर",
   fleet_priority_note: "उच्च प्राथमिकता के कारण गंभीर स्टॉप आगे किया गया",
+  fleet_gps_denied: "स्थान पहुँच अस्वीकृत",
+  fleet_gps_instructions: "Settings खोलें और इस ऐप के लिए स्थान पहुँच सक्षम करें।",
+  fleet_manual_lat: "अक्षांश",
+  fleet_manual_lon: "देशांतर",
+  fleet_no_results: "कोई स्थान नहीं मिला",
+  fleet_priority: "प्राथमिकता",
+  fleet_min_waypoints: "कम से कम एक गंतव्य वेपॉइंट जोड़ें",
+  fleet_no_start: "प्रारंभ स्थान अनुपलब्ध",
+  fleet_min_unit: "मिनट",
+  fleet_remove: "हटाएं",
 
   heat_ban_title: "गर्मी कार्य प्रतिबंध",
   heat_ban_body: "MOHRE प्रतिबंध: 12:30–15:00 बाहरी कार्य निषिद्ध (15 जून–15 सितंबर)।",

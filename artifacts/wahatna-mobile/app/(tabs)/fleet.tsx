@@ -1,9 +1,11 @@
+import * as Location from "expo-location";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,131 +19,204 @@ import { RouteMap } from "@/components/RouteMap";
 import { apiPost, geocode, type GeoResult } from "@/constants/api";
 import type { MapPoint } from "@/constants/mapHtml";
 import { useAuth } from "@/context/AuthContext";
-import { useLocation } from "@/context/LocationContext";
+import { useTranslation } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
-type Kind = "start" | "stop" | "destination";
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface Stop {
+type TransportMode = "walking" | "car" | "service_vehicle";
+type GpsStatus = "loading" | "granted" | "denied";
+
+interface WaypointItem {
   id: string;
   label: string;
   address?: string;
   lat: number;
   lon: number;
-  kind: Kind;
+  priority: number; // 1–5
 }
 
-interface OptimizedStop {
+interface RouteStop {
   order: number;
-  label?: string;
   lat: number;
   lon: number;
-  distance_to_next_km: number;
+  label: string;
   original_index: number;
+  distance_to_next_km: number;
 }
+
 interface FleetResult {
   job_id: string;
-  optimized_route: OptimizedStop[];
+  transport_mode: string;
+  original_route: RouteStop[];
+  optimized_route: RouteStop[];
+  priority_explanation: string[];
   metrics: {
-    total_distance_km: number;
-    initial_distance_km: number;
+    original_distance_km: number;
+    optimized_distance_km: number;
+    distance_saved_km: number;
+    original_time_min: number;
+    optimized_time_min: number;
+    time_saved_min: number;
     improvement_pct: number;
+    speed_kmh: number;
     elapsed_ms: number;
   };
 }
 
-const UAE_PRESETS: Omit<Stop, "id">[] = [
-  { label: "Dubai", address: "Dubai, UAE", lat: 25.2048, lon: 55.2708, kind: "start" },
-  { label: "Sharjah", address: "Sharjah, UAE", lat: 25.3463, lon: 55.4209, kind: "stop" },
-  { label: "Abu Dhabi", address: "Abu Dhabi, UAE", lat: 24.4539, lon: 54.3773, kind: "destination" },
-];
-
-const KIND_META: Record<Kind, { label: string; icon: keyof typeof Feather.glyphMap }> = {
-  start: { label: "Start", icon: "play" },
-  stop: { label: "Stop", icon: "map-pin" },
-  destination: { label: "End", icon: "flag" },
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 let idCounter = 0;
-const newId = () => `s${Date.now()}_${idCounter++}`;
-const kindRank = (k: Kind) => (k === "start" ? 0 : k === "destination" ? 2 : 1);
+const newId = () => `w${Date.now()}_${idCounter++}`;
 
-function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.sqrt(h));
+const PRIORITY_LEVELS: { value: number; key: "fleet_priority_low" | "fleet_priority_medium" | "fleet_priority_high" | "fleet_priority_critical" }[] = [
+  { value: 1, key: "fleet_priority_low" },
+  { value: 2, key: "fleet_priority_medium" },
+  { value: 4, key: "fleet_priority_high" },
+  { value: 5, key: "fleet_priority_critical" },
+];
+
+function priorityColor(p: number, colors: ReturnType<typeof useColors>): string {
+  if (p >= 5) return "#DC2626";
+  if (p >= 4) return "#EA580C";
+  if (p >= 2) return "#D97706";
+  return colors.mutedForeground;
 }
 
-/**
- * The backend returns a closed TSP tour. Reverse-traversing a tour preserves
- * its (optimal) length, so we re-present it as an OPEN path: rotate so the
- * user's start is first, then pick whichever of the two equivalent traversals
- * places the destination latest. Distances are recomputed per consecutive
- * pair (no cyclic wrap), and the terminal stop has no "distance to next".
- */
-function orientRoute(
-  route: OptimizedStop[],
-  startOrigIdx: number,
-  destOrigIdx: number
-): OptimizedStop[] {
-  if (route.length < 2) return route;
-  let oriented = route;
-  if (startOrigIdx >= 0) {
-    const si = route.findIndex((r) => r.original_index === startOrigIdx);
-    if (si > 0) oriented = [...route.slice(si), ...route.slice(0, si)];
-  }
-  if (destOrigIdx >= 0 && oriented.length > 2) {
-    const reversed = [oriented[0], ...oriented.slice(1).reverse()];
-    const diFwd = oriented.findIndex((r) => r.original_index === destOrigIdx);
-    const diRev = reversed.findIndex((r) => r.original_index === destOrigIdx);
-    if (diRev > diFwd) oriented = reversed;
-  }
-  return oriented.map((item, i) => ({
-    ...item,
-    order: i + 1,
-    distance_to_next_km:
-      i < oriented.length - 1 ? haversineKm(item, oriented[i + 1]) : 0,
-  }));
+function fmtDist(km: number): string {
+  return km.toFixed(1);
 }
+
+function fmtTime(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function ChipSelector<T extends string>({
+  options,
+  value,
+  onSelect,
+  colors,
+}: {
+  options: { key: T; label: string }[];
+  value: T;
+  onSelect: (k: T) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={chipStyles.row}>
+      {options.map((opt) => {
+        const active = opt.key === value;
+        return (
+          <Pressable
+            key={opt.key}
+            onPress={() => onSelect(opt.key)}
+            style={[
+              chipStyles.chip,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.primary + "22" : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                chipStyles.chipText,
+                { color: active ? colors.primary : colors.mutedForeground },
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  chipText: { fontSize: 12, fontWeight: "600" as const },
+});
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function FleetScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { lastLocation } = useLocation();
+  const { t, isRTL } = useTranslation();
+  const rowDir: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
+  const textAlign: "left" | "right" = isRTL ? "right" : "left";
 
-  const [stops, setStops] = useState<Stop[]>([]);
-  const [submitted, setSubmitted] = useState<Stop[]>([]);
+  // GPS start location
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>("loading");
+  const [gpsCoord, setGpsCoord] = useState<{ lat: number; lon: number } | null>(null);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLon, setManualLon] = useState("");
+
+  // Transport mode
+  const [transportMode, setTransportMode] = useState<TransportMode>("car");
+
+  // Waypoints (destinations only)
+  const [waypoints, setWaypoints] = useState<WaypointItem[]>([]);
+
+  // Search
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GeoResult[]>([]);
+  const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Optimize
   const [result, setResult] = useState<FleetResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const kindColor = (k: Kind) =>
-    k === "start" ? colors.success : k === "destination" ? colors.accent : colors.mutedForeground;
+  // ── Auto-detect GPS on mount ──────────────────────────────────────────────
 
-  const nextKind = (existing: Stop[]): Kind => {
-    if (!existing.some((s) => s.kind === "start")) return "start";
-    if (!existing.some((s) => s.kind === "destination")) return "destination";
-    return "stop";
-  };
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      setGpsStatus("denied");
+      return;
+    }
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setGpsStatus("denied");
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setGpsCoord({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setGpsStatus("granted");
+      } catch {
+        setGpsStatus("denied");
+      }
+    })();
+  }, []);
 
-  const runSearch = (q: string) => {
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  const runSearch = useCallback((q: string) => {
     setQuery(q);
     setSearchError("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (q.trim().length < 3) {
-      setResults([]);
+      setSearchResults([]);
       setSearching(false);
       return;
     }
@@ -149,81 +224,62 @@ export default function FleetScreen() {
     debounceRef.current = setTimeout(async () => {
       try {
         const r = await geocode(q);
-        setResults(r);
-        if (r.length === 0) setSearchError("No places found");
+        setSearchResults(r);
+        if (r.length === 0) setSearchError(t("fleet_no_results"));
       } catch (e: unknown) {
-        setSearchError((e as Error).message || "Search failed");
-        setResults([]);
+        setSearchError((e as Error).message || t("err_generic"));
+        setSearchResults([]);
       } finally {
         setSearching(false);
       }
     }, 450);
-  };
+  }, [t]);
 
-  const addStop = (g: GeoResult) => {
-    setStops((prev) => [
+  const addWaypoint = useCallback((g: GeoResult) => {
+    setWaypoints((prev) => [
       ...prev,
-      { id: newId(), label: g.label, address: g.address, lat: g.lat, lon: g.lon, kind: nextKind(prev) },
+      { id: newId(), label: g.label, address: g.address, lat: g.lat, lon: g.lon, priority: 2 },
     ]);
     setQuery("");
-    setResults([]);
+    setSearchResults([]);
     setSearchError("");
     setResult(null);
-  };
+  }, []);
 
-  const addCurrentLocation = () => {
-    if (!lastLocation) return;
-    setStops((prev) => [
-      ...prev,
-      {
-        id: newId(),
-        label: "My Location",
-        address: "Current GPS position",
-        lat: lastLocation.lat,
-        lon: lastLocation.lon,
-        kind: nextKind(prev),
-      },
-    ]);
+  const removeWaypoint = useCallback((id: string) => {
+    setWaypoints((prev) => prev.filter((w) => w.id !== id));
     setResult(null);
-  };
+  }, []);
 
-  const loadPresets = () => {
-    setStops(UAE_PRESETS.map((p) => ({ ...p, id: newId() })));
+  const setWaypointPriority = useCallback((id: string, priority: number) => {
+    setWaypoints((prev) => prev.map((w) => (w.id === id ? { ...w, priority } : w)));
     setResult(null);
+  }, []);
+
+  const setWaypointLabel = useCallback((id: string, label: string) => {
+    setWaypoints((prev) => prev.map((w) => (w.id === id ? { ...w, label } : w)));
+  }, []);
+
+  // ── Get effective start coord ─────────────────────────────────────────────
+
+  const getStart = (): { lat: number; lon: number } | null => {
+    if (gpsCoord) return gpsCoord;
+    const lat = parseFloat(manualLat);
+    const lon = parseFloat(manualLon);
+    if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
+    return null;
   };
 
-  const removeStop = (id: string) => {
-    setStops((prev) => prev.filter((s) => s.id !== id));
-    setResult(null);
-  };
+  // ── Optimize ─────────────────────────────────────────────────────────────
 
-  const setKind = (id: string, kind: Kind) => {
-    setStops((prev) =>
-      prev.map((s) => {
-        if (s.id === id) return { ...s, kind };
-        if (kind !== "stop" && s.kind === kind) return { ...s, kind: "stop" };
-        return s;
-      })
-    );
-    setResult(null);
-  };
-
-  const setLabel = (id: string, label: string) =>
-    setStops((prev) => prev.map((s) => (s.id === id ? { ...s, label } : s)));
-
-  const optimize = async () => {
-    if (stops.length < 2) {
-      setError("Add at least a start and a destination");
+  const handleOptimize = async () => {
+    const start = getStart();
+    if (!start) {
+      setError(t("fleet_no_start"));
       return;
     }
-    const starts = stops.filter((s) => s.kind === "start").length;
-    const ends = stops.filter((s) => s.kind === "destination").length;
-    if (starts !== 1) {
-      setError("Mark exactly one location as the Start");
-      return;
-    }
-    if (ends !== 1) {
-      setError("Mark exactly one location as the End");
+    if (waypoints.length < 1) {
+      setError(t("fleet_min_waypoints"));
       return;
     }
     setError("");
@@ -232,49 +288,80 @@ export default function FleetScreen() {
     fadeAnim.setValue(0);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const ordered = [...stops].sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
-      setSubmitted(ordered);
-      const startOrigIdx = ordered.findIndex((s) => s.kind === "start");
-      const destOrigIdx = ordered.findIndex((s) => s.kind === "destination");
       const payload = {
-        waypoints: ordered.map((s) => ({ lat: s.lat, lon: s.lon, label: s.label })),
+        start: { lat: start.lat, lon: start.lon },
+        waypoints: waypoints.map((w) => ({
+          lat: w.lat,
+          lon: w.lon,
+          label: w.label,
+          priority: w.priority,
+        })),
+        transport_mode: transportMode,
       };
       const res = await apiPost<FleetResult>("/fleet/optimize", payload, token);
-      const oriented = orientRoute(res.optimized_route, startOrigIdx, destOrigIdx);
-      const pathTotal = oriented.reduce((sum, s) => sum + s.distance_to_next_km, 0);
-      setResult({
-        ...res,
-        optimized_route: oriented,
-        metrics: { ...res.metrics, total_distance_km: pathTotal },
-      });
+      setResult(res);
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: unknown) {
-      setError((e as Error).message);
+      setError((e as Error).message || t("err_generic"));
     } finally {
       setLoading(false);
     }
   };
 
-  const mapData = useMemo(() => {
-    if (result && result.optimized_route.length) {
-      const pts: MapPoint[] = result.optimized_route.map((s) => ({
-        lat: s.lat,
-        lon: s.lon,
-        label: s.label || `Stop ${s.order}`,
-        kind: submitted[s.original_index]?.kind ?? "stop",
-      }));
-      const route = result.optimized_route.map((s) => [s.lat, s.lon] as [number, number]);
-      return { pts, route };
+  // ── Map data ──────────────────────────────────────────────────────────────
+
+  const mapPoints = useMemo<MapPoint[]>(() => {
+    if (result) {
+      const pts: MapPoint[] = [];
+      const start = getStart();
+      if (start) {
+        pts.push({ lat: start.lat, lon: start.lon, label: t("fleet_start_location"), kind: "start" });
+      }
+      result.optimized_route.forEach((s) => {
+        const origWp = waypoints[s.original_index];
+        const p = origWp?.priority ?? 2;
+        pts.push({
+          lat: s.lat,
+          lon: s.lon,
+          label: `${s.order}. ${s.label}`,
+          kind: "stop",
+          color: p >= 5 ? "#DC2626" : p >= 4 ? "#EA580C" : "#2563EB",
+        });
+      });
+      return pts;
     }
-    const pts: MapPoint[] = stops.map((s) => ({
-      lat: s.lat,
-      lon: s.lon,
-      label: s.label,
-      kind: s.kind,
-    }));
-    return { pts, route: [] as [number, number][] };
-  }, [result, stops, submitted]);
+    const pts: MapPoint[] = [];
+    const start = getStart();
+    if (start) {
+      pts.push({ lat: start.lat, lon: start.lon, label: t("fleet_start_location"), kind: "start" });
+    }
+    waypoints.forEach((w) => pts.push({ lat: w.lat, lon: w.lon, label: w.label, kind: "stop" }));
+    return pts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, waypoints, gpsCoord]);
+
+  const mapRoute = useMemo<[number, number][]>(() => {
+    if (!result) return [];
+    const start = getStart();
+    const pts: [number, number][] = start ? [[start.lat, start.lon]] : [];
+    result.optimized_route.forEach((s) => pts.push([s.lat, s.lon]));
+    return pts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, gpsCoord]);
+
+  // ── Transport mode options ────────────────────────────────────────────────
+
+  const modeOptions: { key: TransportMode; label: string }[] = [
+    { key: "walking", label: t("fleet_walking") },
+    { key: "car", label: t("fleet_car") },
+    { key: "service_vehicle", label: t("fleet_service_vehicle") },
+  ];
+
+  const priorityOptions = PRIORITY_LEVELS.map((p) => ({
+    key: String(p.value) as string,
+    label: t(p.key),
+  }));
 
   const paddingBottom = insets.bottom + 90;
 
@@ -285,22 +372,108 @@ export default function FleetScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Map */}
-        <RouteMap points={mapData.pts} route={mapData.route} height={260} />
+        <RouteMap points={mapPoints} route={mapRoute} height={240} />
 
-        {/* Search / add location */}
+        {/* ── Start Location ── */}
         <GlassCard padding={14} style={{ gap: 10 }}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>PLAN ROUTE</Text>
-            <Pressable onPress={loadPresets} style={[styles.presetBtn, { borderColor: colors.border }]}>
-              <Text style={[styles.presetText, { color: colors.primary }]}>UAE Demo</Text>
-            </Pressable>
-          </View>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground, textAlign }]}>
+            {t("fleet_start_location").toUpperCase()}
+          </Text>
 
-          <View style={styles.searchRow}>
+          {gpsStatus === "loading" && (
+            <View style={[styles.row, { flexDirection: rowDir, gap: 8 }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                {t("fleet_optimizing")}
+              </Text>
+            </View>
+          )}
+
+          {gpsStatus === "granted" && gpsCoord && (
+            <View style={[styles.gpsChip, { backgroundColor: colors.glowGreen, flexDirection: rowDir }]}>
+              <Feather name="navigation" size={14} color={colors.primary} />
+              <Text style={[styles.gpsChipText, { color: colors.primary }]}>
+                {t("fleet_using_gps")} · {gpsCoord.lat.toFixed(4)}°, {gpsCoord.lon.toFixed(4)}°
+              </Text>
+            </View>
+          )}
+
+          {gpsStatus === "denied" && (
+            <View style={{ gap: 10 }}>
+              <View style={[styles.row, { flexDirection: rowDir, gap: 6 }]}>
+                <Feather name="alert-circle" size={14} color={colors.danger} />
+                <Text style={[styles.hintText, { color: colors.danger }]}>
+                  {t("fleet_gps_denied")}
+                </Text>
+              </View>
+              <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign }]}>
+                {t("fleet_gps_instructions")}
+              </Text>
+              <View style={[styles.coordRow, { flexDirection: rowDir, gap: 8 }]}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
+                    {t("fleet_manual_lat")}
+                  </Text>
+                  <TextInput
+                    style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
+                    value={manualLat}
+                    onChangeText={setManualLat}
+                    keyboardType="decimal-pad"
+                    placeholder="24.1234"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
+                    {t("fleet_manual_lon")}
+                  </Text>
+                  <TextInput
+                    style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
+                    value={manualLon}
+                    onChangeText={setManualLon}
+                    keyboardType="decimal-pad"
+                    placeholder="55.5678"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+        </GlassCard>
+
+        {/* ── Transport Mode ── */}
+        <GlassCard padding={14} style={{ gap: 10 }}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground, textAlign }]}>
+            {t("fleet_transport_mode").toUpperCase()}
+          </Text>
+          <ChipSelector
+            options={modeOptions}
+            value={transportMode}
+            onSelect={(m) => { setTransportMode(m); setResult(null); }}
+            colors={colors}
+          />
+          {transportMode === "walking" && (
+            <View style={[styles.disclaimerRow, { flexDirection: rowDir, borderColor: colors.border }]}>
+              <Feather name="info" size={13} color={colors.mutedForeground} />
+              <Text style={[styles.disclaimerText, { color: colors.mutedForeground, textAlign }]}>
+                {t("fleet_walking_disclaimer")}
+              </Text>
+            </View>
+          )}
+        </GlassCard>
+
+        {/* ── Destination Waypoints ── */}
+        <GlassCard padding={14} style={{ gap: 10 }}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground, textAlign }]}>
+            {t("fleet_add_waypoint").toUpperCase()}
+          </Text>
+
+          {/* Search */}
+          <View style={[styles.searchRow, { flexDirection: rowDir }]}>
             <Feather name="search" size={16} color={colors.mutedForeground} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search a place (e.g. Dubai Marina)"
+              placeholder={t("fleet_add_waypoint") + "…"}
               placeholderTextColor={colors.mutedForeground}
               value={query}
               onChangeText={runSearch}
@@ -310,133 +483,115 @@ export default function FleetScreen() {
           </View>
 
           {!!searchError && (
-            <Text style={[styles.hintText, { color: colors.danger }]}>{searchError}</Text>
+            <Text style={[styles.hintText, { color: colors.danger, textAlign }]}>{searchError}</Text>
           )}
 
-          {results.map((g, i) => (
+          {searchResults.map((g, i) => (
             <Pressable
               key={`${g.lat}-${g.lon}-${i}`}
-              onPress={() => addStop(g)}
+              onPress={() => addWaypoint(g)}
               style={({ pressed }) => [
                 styles.resultRow,
-                { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+                { borderColor: colors.border, opacity: pressed ? 0.6 : 1, flexDirection: rowDir },
               ]}
             >
               <Feather name="map-pin" size={14} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.resultLabel, { color: colors.text }]} numberOfLines={1}>
+                <Text style={[styles.resultLabel, { color: colors.text, textAlign }]} numberOfLines={1}>
                   {g.label}
                 </Text>
-                <Text style={[styles.resultAddr, { color: colors.mutedForeground }]} numberOfLines={1}>
+                <Text style={[styles.resultAddr, { color: colors.mutedForeground, textAlign }]} numberOfLines={1}>
                   {g.address}
                 </Text>
               </View>
               <Feather name="plus-circle" size={18} color={colors.primary} />
             </Pressable>
           ))}
-
-          {lastLocation && (
-            <Pressable
-              onPress={addCurrentLocation}
-              style={[styles.gpsRow, { borderColor: colors.border }]}
-            >
-              <Feather name="navigation" size={14} color={colors.primary} />
-              <Text style={[styles.gpsText, { color: colors.primary }]}>Use my current location</Text>
-            </Pressable>
-          )}
         </GlassCard>
 
-        {/* Location list (label + type + km frame) */}
-        {stops.length === 0 ? (
+        {/* ── Waypoint list with priority ── */}
+        {waypoints.length === 0 ? (
           <View style={styles.emptyBox}>
             <Feather name="map" size={22} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Search for places to add your start, stops, and destination.
+            <Text style={[styles.emptyText, { color: colors.mutedForeground, textAlign: "center" }]}>
+              {t("fleet_min_waypoints")}
             </Text>
           </View>
         ) : (
-          stops.map((s) => {
-            const opt = result?.optimized_route.find((o) => submitted[o.original_index]?.id === s.id);
-            return (
-              <GlassCard key={s.id} padding={12} style={{ gap: 10 }}>
-                <View style={styles.stopTopRow}>
-                  <View style={[styles.kindDot, { backgroundColor: kindColor(s.kind) }]} />
-                  <TextInput
-                    style={[styles.labelInput, { color: colors.text, borderColor: colors.border }]}
-                    value={s.label}
-                    onChangeText={(v) => setLabel(s.id, v)}
-                    placeholder="Label"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                  <Pressable onPress={() => removeStop(s.id)} hitSlop={8}>
-                    <Feather name="x" size={18} color={colors.mutedForeground} />
-                  </Pressable>
-                </View>
-
-                {!!s.address && (
-                  <Text style={[styles.addrText, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {s.address}
+          waypoints.map((w, idx) => (
+            <GlassCard key={w.id} padding={12} style={{ gap: 10 }}>
+              {/* Label row */}
+              <View style={[styles.wpTopRow, { flexDirection: rowDir }]}>
+                <View style={[styles.wpBadge, { backgroundColor: priorityColor(w.priority, colors) + "22" }]}>
+                  <Text style={[styles.wpBadgeText, { color: priorityColor(w.priority, colors) }]}>
+                    {idx + 1}
                   </Text>
-                )}
-
-                <View style={styles.kindRow}>
-                  {(Object.keys(KIND_META) as Kind[]).map((k) => {
-                    const active = s.kind === k;
-                    return (
-                      <Pressable
-                        key={k}
-                        onPress={() => setKind(s.id, k)}
-                        style={[
-                          styles.kindBtn,
-                          {
-                            borderColor: active ? kindColor(k) : colors.border,
-                            backgroundColor: active ? colors.surface2 : "transparent",
-                          },
-                        ]}
-                      >
-                        <Feather
-                          name={KIND_META[k].icon}
-                          size={12}
-                          color={active ? kindColor(k) : colors.mutedForeground}
-                        />
-                        <Text
-                          style={[
-                            styles.kindBtnText,
-                            { color: active ? colors.text : colors.mutedForeground },
-                          ]}
-                        >
-                          {KIND_META[k].label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                  {opt && opt.distance_to_next_km > 0 && (
-                    <View style={[styles.kmPill, { backgroundColor: colors.glowGreen }]}>
-                      <Feather name="arrow-right" size={11} color={colors.primary} />
-                      <Text style={[styles.kmText, { color: colors.primary }]}>
-                        {opt.distance_to_next_km.toFixed(1)} km
-                      </Text>
-                    </View>
-                  )}
                 </View>
-              </GlassCard>
-            );
-          })
+                <TextInput
+                  style={[styles.labelInput, { color: colors.text, borderColor: colors.border, flex: 1 }]}
+                  value={w.label}
+                  onChangeText={(v) => setWaypointLabel(w.id, v)}
+                  placeholder="Label"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                <Pressable onPress={() => removeWaypoint(w.id)} hitSlop={8}>
+                  <Feather name="x" size={18} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+
+              {!!w.address && (
+                <Text style={[styles.addrText, { color: colors.mutedForeground, textAlign }]} numberOfLines={1}>
+                  {w.address}
+                </Text>
+              )}
+
+              {/* Priority selector */}
+              <View style={[styles.priorityRow, { flexDirection: rowDir }]}>
+                <Text style={[styles.priorityLabel, { color: colors.mutedForeground }]}>
+                  {t("fleet_priority")}:
+                </Text>
+                {PRIORITY_LEVELS.map((pl) => {
+                  const active = w.priority === pl.value;
+                  const pColor = priorityColor(pl.value, colors);
+                  return (
+                    <Pressable
+                      key={pl.value}
+                      onPress={() => setWaypointPriority(w.id, pl.value)}
+                      style={[
+                        styles.priorityBtn,
+                        {
+                          borderColor: active ? pColor : colors.border,
+                          backgroundColor: active ? pColor + "22" : "transparent",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.priorityBtnText, { color: active ? pColor : colors.mutedForeground }]}
+                      >
+                        {t(pl.key)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </GlassCard>
+          ))
         )}
 
         {!!error && (
-          <View style={styles.errorRow}>
+          <View style={[styles.errorRow, { flexDirection: rowDir }]}>
             <Feather name="alert-circle" size={13} color={colors.danger} />
             <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
           </View>
         )}
 
+        {/* ── Optimize button ── */}
         <Pressable
           style={({ pressed }) => [
             styles.optimizeBtn,
             { backgroundColor: colors.primary, opacity: loading || pressed ? 0.85 : 1 },
           ]}
-          onPress={optimize}
+          onPress={handleOptimize}
           disabled={loading}
         >
           {loading ? (
@@ -445,81 +600,121 @@ export default function FleetScreen() {
             <>
               <Feather name="cpu" size={18} color={colors.primaryForeground} />
               <Text style={[styles.optimizeBtnText, { color: colors.primaryForeground }]}>
-                OPTIMIZE ROUTE
+                {t("fleet_optimize").toUpperCase()}
               </Text>
             </>
           )}
         </Pressable>
 
+        {/* ── Results ── */}
         {result && (
-          <Animated.View style={{ opacity: fadeAnim, gap: 10 }}>
+          <Animated.View style={{ opacity: fadeAnim, gap: 12 }}>
+
+            {/* Savings metrics banner */}
             <GlassCard glowColor={colors.glowGreen} padding={14}>
-              <View style={styles.metricsRow}>
+              <View style={[styles.metricsRow, { flexDirection: rowDir }]}>
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.primary }]}>
-                    {result.metrics.total_distance_km != null
-                      ? result.metrics.total_distance_km.toFixed(1)
-                      : "0"}
+                    {fmtDist(result.metrics.distance_saved_km)}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>km total</Text>
+                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
+                    km {t("fleet_distance_saved").toLowerCase()}
+                  </Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.text }]}>
-                    {result.metrics.improvement_pct != null
-                      ? `${result.metrics.improvement_pct.toFixed(0)}%`
-                      : "—"}
+                    {fmtTime(result.metrics.time_saved_min)}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>shorter</Text>
+                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
+                    {t("fleet_time_saved")}
+                  </Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.metric}>
                   <Text style={[styles.metricValue, { color: colors.text }]}>
-                    {result.metrics.elapsed_ms != null ? `${result.metrics.elapsed_ms}ms` : "—"}
+                    {result.metrics.improvement_pct.toFixed(0)}%
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>compute</Text>
+                  <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>
+                    shorter
+                  </Text>
                 </View>
               </View>
             </GlassCard>
 
-            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-              OPTIMIZED ORDER
-            </Text>
+            {/* Priority callout */}
+            {result.priority_explanation.length > 0 && (
+              <View style={[styles.priorityCallout, { backgroundColor: "#DC262622", borderColor: "#DC2626" }]}>
+                <Feather name="alert-triangle" size={14} color="#DC2626" />
+                <Text style={[styles.priorityCalloutText, { color: "#DC2626", textAlign }]}>
+                  {t("fleet_priority_note")}
+                  {result.priority_explanation.length > 0 ? `: ${result.priority_explanation.join(", ")}` : ""}
+                </Text>
+              </View>
+            )}
 
-            {result.optimized_route.map((stop, i) => {
-              const kind = submitted[stop.original_index]?.kind ?? "stop";
-              return (
-                <View key={i} style={styles.orderRow}>
-                  <View style={[styles.stopNum, { backgroundColor: kindColor(kind) }]}>
-                    <Text style={[styles.stopNumText, { color: colors.primaryForeground }]}>
-                      {i + 1}
-                    </Text>
-                  </View>
-                  <View style={styles.stopInfo}>
-                    <Text style={[styles.stopLabel, { color: colors.text }]}>
-                      {stop.label || `Stop ${i + 1}`}
-                    </Text>
-                    <Text style={[styles.stopKind, { color: colors.mutedForeground }]}>
-                      {KIND_META[kind].label}
-                    </Text>
-                  </View>
-                  {i < result.optimized_route.length - 1 && stop.distance_to_next_km > 0 && (
-                    <View style={styles.kmPillSmall}>
-                      <Feather name="arrow-down" size={11} color={colors.primary} />
-                      <Text style={[styles.kmText, { color: colors.primary }]}>
-                        {stop.distance_to_next_km.toFixed(1)} km
+            {/* Two-panel comparison */}
+            <View style={[styles.comparisonRow, { flexDirection: rowDir }]}>
+              {/* Original Order panel */}
+              <View style={[styles.compPanel, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Text style={[styles.compHeader, { color: colors.mutedForeground }]}>
+                  {t("fleet_original_order").toUpperCase()}
+                </Text>
+                <Text style={[styles.compDist, { color: colors.text }]}>
+                  {fmtDist(result.metrics.original_distance_km)} km
+                </Text>
+                <Text style={[styles.compTime, { color: colors.mutedForeground }]}>
+                  ~{fmtTime(result.metrics.original_time_min)}
+                </Text>
+                <View style={styles.compStops}>
+                  {result.original_route.map((stop, i) => (
+                    <View key={i} style={[styles.compStopRow, { flexDirection: rowDir }]}>
+                      <View style={[styles.compDot, { backgroundColor: colors.mutedForeground }]} />
+                      <Text style={[styles.compStopLabel, { color: colors.text }]} numberOfLines={1}>
+                        {stop.label}
                       </Text>
                     </View>
-                  )}
+                  ))}
                 </View>
-              );
-            })}
+              </View>
 
-            <View style={[styles.jobIdRow, { borderTopColor: colors.border }]}>
-              <Text style={[styles.jobId, { color: colors.mutedForeground }]}>
-                Job #{result.job_id}
-              </Text>
+              {/* Optimized Route panel */}
+              <View style={[styles.compPanel, { borderColor: colors.primary + "66", backgroundColor: colors.card }]}>
+                <Text style={[styles.compHeader, { color: colors.primary }]}>
+                  {t("fleet_optimized_route").toUpperCase()}
+                </Text>
+                <Text style={[styles.compDist, { color: colors.primary }]}>
+                  {fmtDist(result.metrics.optimized_distance_km)} km
+                </Text>
+                <Text style={[styles.compTime, { color: colors.mutedForeground }]}>
+                  ~{fmtTime(result.metrics.optimized_time_min)}
+                </Text>
+                <View style={styles.compStops}>
+                  {result.optimized_route.map((stop, i) => {
+                    const origWp = waypoints[stop.original_index];
+                    const p = origWp?.priority ?? 2;
+                    return (
+                      <View key={i} style={[styles.compStopRow, { flexDirection: rowDir }]}>
+                        <View style={[styles.compDot, { backgroundColor: priorityColor(p, colors) }]} />
+                        <Text style={[styles.compStopLabel, { color: colors.text }]} numberOfLines={1}>
+                          {stop.label}
+                        </Text>
+                        {stop.distance_to_next_km > 0 && (
+                          <Text style={[styles.compKm, { color: colors.mutedForeground }]}>
+                            {stop.distance_to_next_km.toFixed(1)} km
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
+
+            {/* Job ID */}
+            <Text style={[styles.jobId, { color: colors.mutedForeground, textAlign }]}>
+              Job #{result.job_id} · {result.transport_mode} · {result.metrics.speed_kmh} km/h
+            </Text>
           </Animated.View>
         )}
       </ScrollView>
@@ -529,15 +724,38 @@ export default function FleetScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sectionTitle: { fontSize: 11, fontWeight: "700" as const, letterSpacing: 1.5 },
-  presetBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
-  presetText: { fontSize: 12, fontWeight: "600" as const },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  searchInput: { flex: 1, height: 38, fontSize: 14 },
+  row: { alignItems: "center" },
   hintText: { fontSize: 12 },
+  gpsChip: {
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  gpsChipText: { fontSize: 13, fontWeight: "600" as const, flexShrink: 1 },
+  coordRow: { alignItems: "flex-end" },
+  coordLabel: { fontSize: 11, fontWeight: "600" as const },
+  coordInput: {
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    fontSize: 14,
+  },
+  disclaimerRow: {
+    alignItems: "flex-start",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  disclaimerText: { fontSize: 11, flex: 1 },
+  searchRow: { alignItems: "center", gap: 8 },
+  searchInput: { flex: 1, height: 38, fontSize: 14 },
   resultRow: {
-    flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingVertical: 8,
@@ -546,53 +764,35 @@ const styles = StyleSheet.create({
   },
   resultLabel: { fontSize: 14, fontWeight: "600" as const },
   resultAddr: { fontSize: 11 },
-  gpsRow: {
-    flexDirection: "row",
+  emptyBox: { alignItems: "center", gap: 8, paddingVertical: 24 },
+  emptyText: { fontSize: 13, maxWidth: 260 },
+  wpTopRow: { alignItems: "center", gap: 10 },
+  wpBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderStyle: "dashed",
   },
-  gpsText: { fontSize: 13, fontWeight: "600" as const },
-  emptyBox: { alignItems: "center", gap: 8, paddingVertical: 24 },
-  emptyText: { fontSize: 13, textAlign: "center", maxWidth: 260 },
-  stopTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  kindDot: { width: 12, height: 12, borderRadius: 6 },
+  wpBadgeText: { fontSize: 13, fontWeight: "700" as const },
   labelInput: {
-    flex: 1,
     height: 36,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     fontSize: 14,
   },
-  addrText: { fontSize: 12, marginLeft: 22 },
-  kindRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  kindBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  addrText: { fontSize: 12, marginLeft: 38 },
+  priorityRow: { alignItems: "center", gap: 6, flexWrap: "wrap" },
+  priorityLabel: { fontSize: 11, fontWeight: "600" as const },
+  priorityBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
   },
-  kindBtnText: { fontSize: 12, fontWeight: "600" as const },
-  kmPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginLeft: "auto",
-  },
-  kmPillSmall: { flexDirection: "row", alignItems: "center", gap: 3 },
-  kmText: { fontSize: 12, fontWeight: "700" as const },
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  priorityBtnText: { fontSize: 11, fontWeight: "600" as const },
+  errorRow: { alignItems: "center", gap: 6 },
   errorText: { fontSize: 13 },
   optimizeBtn: {
     height: 54,
@@ -608,17 +808,36 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   optimizeBtnText: { fontSize: 15, fontWeight: "700" as const, letterSpacing: 1.5 },
-  metricsRow: { flexDirection: "row", alignItems: "center" },
+  metricsRow: { alignItems: "center" },
   metric: { flex: 1, alignItems: "center" },
-  metricValue: { fontSize: 22, fontWeight: "800" as const },
-  metricLabel: { fontSize: 10, fontWeight: "600" as const, letterSpacing: 0.5 },
+  metricValue: { fontSize: 20, fontWeight: "800" as const },
+  metricLabel: { fontSize: 10, fontWeight: "600" as const, letterSpacing: 0.5, textAlign: "center" },
   metricDivider: { width: 1, height: 36 },
-  orderRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  stopNum: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  stopNumText: { fontSize: 13, fontWeight: "700" as const },
-  stopInfo: { flex: 1 },
-  stopLabel: { fontSize: 14, fontWeight: "600" as const },
-  stopKind: { fontSize: 11 },
-  jobIdRow: { borderTopWidth: 1, paddingTop: 10, alignItems: "flex-end" },
-  jobId: { fontSize: 11 },
+  priorityCallout: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  priorityCalloutText: { fontSize: 12, flex: 1, fontWeight: "600" as const },
+  comparisonRow: { gap: 10 },
+  compPanel: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    gap: 4,
+    minWidth: 140,
+  },
+  compHeader: { fontSize: 10, fontWeight: "700" as const, letterSpacing: 1 },
+  compDist: { fontSize: 18, fontWeight: "800" as const },
+  compTime: { fontSize: 11 },
+  compStops: { marginTop: 8, gap: 4 },
+  compStopRow: { alignItems: "center", gap: 6 },
+  compDot: { width: 8, height: 8, borderRadius: 4 },
+  compStopLabel: { fontSize: 11, flex: 1 },
+  compKm: { fontSize: 10 },
+  jobId: { fontSize: 10 },
 });
