@@ -148,6 +148,12 @@ export interface Translations {
   sup_today: string;
   sup_this_week: string;
   sup_all: string;
+  sup_active_incidents: string;
+  sup_no_reports: string;
+  sup_reporter: string;
+  sup_filters: string;
+  sup_phone: string;
+  sup_description: string;
 
   // ── Fleet ──────────────────────────────────────────────────────
   fleet_title: string;
@@ -329,6 +335,12 @@ const en: Translations = {
   sup_today: "Today",
   sup_this_week: "This Week",
   sup_all: "All",
+  sup_active_incidents: "Active Incidents",
+  sup_no_reports: "No reports found",
+  sup_reporter: "Reporter",
+  sup_filters: "Filters",
+  sup_phone: "Phone",
+  sup_description: "Description",
 
   fleet_title: "Fleet & Routes",
   fleet_start_location: "Start Location",
@@ -506,6 +518,12 @@ const ar: Translations = {
   sup_today: "اليوم",
   sup_this_week: "هذا الأسبوع",
   sup_all: "الكل",
+  sup_active_incidents: "الحوادث النشطة",
+  sup_no_reports: "لا توجد بلاغات",
+  sup_reporter: "المُبلِّغ",
+  sup_filters: "الفلاتر",
+  sup_phone: "الهاتف",
+  sup_description: "الوصف",
 
   fleet_title: "الأسطول والمسارات",
   fleet_start_location: "نقطة الانطلاق",
@@ -683,6 +701,12 @@ const ur: Translations = {
   sup_today: "آج",
   sup_this_week: "اس ہفتے",
   sup_all: "سب",
+  sup_active_incidents: "فعال واقعات",
+  sup_no_reports: "کوئی رپورٹ نہیں ملی",
+  sup_reporter: "رپورٹر",
+  sup_filters: "فلٹرز",
+  sup_phone: "فون",
+  sup_description: "تفصیل",
 
   fleet_title: "فلیٹ اور راستے",
   fleet_start_location: "آغاز کا مقام",
@@ -860,6 +884,12 @@ const hi: Translations = {
   sup_today: "आज",
   sup_this_week: "इस सप्ताह",
   sup_all: "सब",
+  sup_active_incidents: "सक्रिय घटनाएं",
+  sup_no_reports: "कोई रिपोर्ट नहीं मिली",
+  sup_reporter: "रिपोर्टर",
+  sup_filters: "फ़िल्टर",
+  sup_phone: "फ़ोन",
+  sup_description: "विवरण",
 
   fleet_title: "फ्लीट और मार्ग",
   fleet_start_location: "प्रारंभ स्थान",
