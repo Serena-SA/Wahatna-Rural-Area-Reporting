@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Router, type IRouter, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { and, desc, eq } from "drizzle-orm";
@@ -8,8 +9,20 @@ import { assessIncident, calculateDueAt } from "../lib/agent";
 import { reportDict } from "../lib/serialize";
 
 const router: IRouter = Router();
+
+const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+
+const diskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, unique);
+  },
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: diskStorage,
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {

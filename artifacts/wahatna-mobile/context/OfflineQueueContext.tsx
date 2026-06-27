@@ -26,7 +26,7 @@ export interface QueueItem {
 }
 
 interface DuplicateWarning {
-  message: string;
+  messageKey: string;
   existingId: string;
 }
 
@@ -83,7 +83,7 @@ export function OfflineQueueProvider({ children }: { children: React.ReactNode }
         return {
           id: duplicate.id,
           duplicate: {
-            message: "A similar report was already submitted within the last 5 minutes for this location.",
+            messageKey: "err_duplicate_report",
             existingId: duplicate.id,
           },
         };

@@ -49,6 +49,7 @@ export function reportDict(incident: Incident): Record<string, unknown> {
     phone_primary: incident.phonePrimary,
     phone_secondary: incident.phoneSecondary,
     image_filename: incident.imageFilename,
+    image_url: incident.imageFilename ? `/uploads/${incident.imageFilename}` : null,
     assessment_summary: incident.assessmentSummary,
     recommended_protocol: incident.recommendedProtocol,
     regulatory_reference: incident.regulatoryReference,

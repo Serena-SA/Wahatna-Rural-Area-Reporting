@@ -186,6 +186,8 @@ export interface Translations {
 
   // ── Errors / success ───────────────────────────────────────────
   err_generic: string;
+  err_field_required: string;
+  err_duplicate_report: string;
   err_network: string;
   err_location: string;
   success_submitted: string;
@@ -361,6 +363,8 @@ const en: Translations = {
   offline_will_submit: "You are offline. Report will be submitted when connection returns.",
 
   err_generic: "Something went wrong. Please try again.",
+  err_field_required: "Required",
+  err_duplicate_report: "A similar report was already submitted within the last 5 minutes for this location.",
   err_network: "Network error. Check your connection.",
   err_location: "Could not get your location.",
   success_submitted: "Report submitted successfully.",
@@ -536,6 +540,8 @@ const ar: Translations = {
   offline_will_submit: "أنت غير متصل. سيُرسَل البلاغ عند عودة الاتصال.",
 
   err_generic: "حدث خطأ. يرجى المحاولة مرة أخرى.",
+  err_field_required: "مطلوب",
+  err_duplicate_report: "تم تقديم بلاغ مماثل خلال الخمس دقائق الماضية لهذا الموقع.",
   err_network: "خطأ في الشبكة. تحقق من الاتصال.",
   err_location: "تعذر الحصول على موقعك.",
   success_submitted: "تم إرسال البلاغ بنجاح.",
@@ -711,6 +717,8 @@ const ur: Translations = {
   offline_will_submit: "آپ آف لائن ہیں۔ رپورٹ انٹرنیٹ آنے پر بھیجی جائے گی۔",
 
   err_generic: "کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔",
+  err_field_required: "ضروری",
+  err_duplicate_report: "گزشتہ 5 منٹ میں اس مقام کے لیے ایک مماثل رپورٹ پہلے ہی جمع کی جا چکی ہے۔",
   err_network: "نیٹ ورک خرابی۔ کنیکشن چیک کریں۔",
   err_location: "آپ کا مقام نہیں مل سکا۔",
   success_submitted: "رپورٹ کامیابی سے جمع ہو گئی۔",
@@ -886,6 +894,8 @@ const hi: Translations = {
   offline_will_submit: "आप ऑफलाइन हैं। कनेक्शन आने पर रिपोर्ट सबमिट होगी।",
 
   err_generic: "कुछ गलत हुआ। फिर से प्रयास करें।",
+  err_field_required: "आवश्यक",
+  err_duplicate_report: "पिछले 5 मिनट में इस स्थान के लिए एक समान रिपोर्ट पहले ही जमा की जा चुकी है।",
   err_network: "नेटवर्क त्रुटि। कनेक्शन जांचें।",
   err_location: "आपका स्थान नहीं मिल सका।",
   success_submitted: "रिपोर्ट सफलतापूर्वक सबमिट हुई।",

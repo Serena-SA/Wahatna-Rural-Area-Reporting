@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Image,
   Platform,
   Pressable,
   RefreshControl,
@@ -26,6 +27,13 @@ interface StatusHistoryEntry {
   note?: string;
 }
 
+function getImageUrl(imageUrl: string | null): string | null {
+  if (!imageUrl) return null;
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const base = domain ? `https://${domain}` : "http://localhost:8080";
+  return `${base}${imageUrl}`;
+}
+
 interface Report {
   id: number;
   reference: string;
@@ -41,6 +49,7 @@ interface Report {
   address_details: string | null;
   phone_primary: string | null;
   image_filename: string | null;
+  image_url: string | null;
   assessment_summary: string | null;
   supervisor_notes: string | null;
   status_history: StatusHistoryEntry[];
@@ -315,6 +324,18 @@ function ReportCard({
         )}
       </View>
 
+      {/* Photo thumbnail strip */}
+      {report.image_url && (() => {
+        const thumbUrl = getImageUrl(report.image_url);
+        return thumbUrl ? (
+          <Image
+            source={{ uri: thumbUrl }}
+            style={styles.reportThumb}
+            resizeMode="cover"
+          />
+        ) : null;
+      })()}
+
       {/* Expanded detail */}
       {expanded && (
         <ReportDetail
@@ -520,6 +541,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   locChipText: { fontSize: 10, fontWeight: "600" as const },
+  reportThumb: { width: "100%", height: 120, borderRadius: 10, marginTop: 8 },
   detailContainer: { borderTopWidth: 1, paddingTop: 12, gap: 10, marginTop: 4 },
   detailDesc: { fontSize: 14, lineHeight: 21 },
   detailRow: { alignItems: "center", gap: 0 },

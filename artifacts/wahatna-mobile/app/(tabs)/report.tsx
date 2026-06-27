@@ -200,9 +200,9 @@ export default function ReportScreen() {
   // ── validation per step ───────────────────────────────────
   function validate(s: WizardStep): string | null {
     if (s === 1) {
-      if (!description.trim()) return t("report_description_label") + " required";
+      if (!description.trim()) return `${t("report_description_label")}: ${t("err_field_required")}`;
       if (description.trim().length < 20) return t("report_description_min");
-      if (!phonePrimary.trim()) return t("report_phone_primary") + " required";
+      if (!phonePrimary.trim()) return `${t("report_phone_primary")}: ${t("err_field_required")}`;
     }
     if (s === 2) {
       const lat = locationSource === "gps" ? gpsLat : locationSource === "pin" ? pinLat : selectedGeo?.lat ?? null;
@@ -252,7 +252,7 @@ export default function ReportScreen() {
       if (duplicate) {
         Alert.alert(
           t("home_safety"),
-          duplicate.message,
+          t(duplicate.messageKey as never),
           [
             { text: t("report_back"), style: "cancel" },
             {
@@ -388,7 +388,9 @@ export default function ReportScreen() {
               <Text style={[styles.confirmLabel, { color: colors.mutedForeground }]}>
                 {t("confirm_status")}
               </Text>
-              <SeverityBadge level="low" size="sm" />
+              <View style={styles.pendingPill}>
+                <Text style={styles.pendingPillText}>{t("status_pending_review").toUpperCase()}</Text>
+              </View>
             </View>
             {dueAt && (
               <View style={[styles.confirmRow, { flexDirection: row, marginTop: 12 }]}>
@@ -1128,6 +1130,8 @@ const styles = StyleSheet.create({
   confirmRow: { justifyContent: "space-between", alignItems: "center" },
   confirmLabel: { fontSize: 12, fontWeight: "600" as const },
   confirmValue: { fontSize: 14, fontWeight: "700" as const },
+  pendingPill: { backgroundColor: "#F3F4F6", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#D1D5DB" },
+  pendingPillText: { fontSize: 10, fontWeight: "700" as const, color: "#6B7280", letterSpacing: 0.5 },
   trackBtn: {
     width: "100%",
     height: 52,
