@@ -4,6 +4,12 @@ import { eq, desc, sql } from "drizzle-orm";
 import { db, fleetWaypointsTable } from "@workspace/db";
 import { requireAuth, type AuthedRequest } from "../lib/auth";
 import { optimizeFleetRoute, type Coord, type FleetWaypoint } from "../lib/optimizer";
+import { getRoadRoute, routingEnabled } from "../lib/routing";
+
+function round(value: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(value * f) / f;
+}
 
 const router: IRouter = Router();
 
@@ -53,6 +59,61 @@ router.post("/fleet/optimize", requireAuth, async (req: AuthedRequest, res: Resp
   }));
 
   const result = optimizeFleetRoute(start, destinations, transportMode, 100, 200);
+
+  // ── Real road routing (mode-aware) via OpenRouteService ──
+  // Replace the straight-line estimate with an actual road route + geometry that
+  // respects the means of transport. Falls back to the Haversine result when ORS
+  // is unavailable (no key / offline / error), so the endpoint never hard-fails.
+  let geometry: [number, number][] = [];
+  let routed = false;
+  if (routingEnabled()) {
+    const optimizedSeq: Coord[] = [
+      start,
+      ...result.optimized_route.stops.map((s) => [s.lat, s.lon] as Coord),
+    ];
+    const orderChanged = result.optimized_route.stops.some((s, i) => s.original_index !== i);
+    const originalSeq: Coord[] = [
+      start,
+      ...result.original_route.stops.map((s) => [s.lat, s.lon] as Coord),
+    ];
+
+    const [optRoad, origRoad] = await Promise.all([
+      getRoadRoute(optimizedSeq, transportMode),
+      orderChanged ? getRoadRoute(originalSeq, transportMode) : Promise.resolve(null),
+    ]);
+
+    if (optRoad) {
+      routed = true;
+      geometry = optRoad.geometry;
+      result.optimized_route.total_distance_km = optRoad.distanceKm;
+      result.optimized_route.estimated_time_min = optRoad.durationMin;
+      // legKm[0] is start→stop1; stop i's distance-to-next is legKm[i+1].
+      const lastIdx = result.optimized_route.stops.length - 1;
+      result.optimized_route.stops.forEach((s, i) => {
+        s.distance_to_next_km =
+          i === lastIdx ? 0 : optRoad.legKm[i + 1] ?? s.distance_to_next_km;
+      });
+
+      // Unchanged order → original road route equals the optimized one.
+      const origRoadEff = origRoad ?? optRoad;
+      result.original_route.total_distance_km = origRoadEff.distanceKm;
+      result.original_route.estimated_time_min = origRoadEff.durationMin;
+
+      const saved = Math.max(0, origRoadEff.distanceKm - optRoad.distanceKm);
+      const timeSaved = Math.max(0, origRoadEff.durationMin - optRoad.durationMin);
+      result.metrics.distance_saved_km = round(saved, 4);
+      result.metrics.time_saved_min = round(timeSaved, 1);
+      result.metrics.improvement_pct = round(
+        origRoadEff.distanceKm > 0 ? (saved / origRoadEff.distanceKm) * 100 : 0,
+        2,
+      );
+      result.metrics.speed_kmh =
+        optRoad.durationMin > 0
+          ? Math.round(optRoad.distanceKm / (optRoad.durationMin / 60))
+          : result.metrics.speed_kmh;
+    }
+  }
+
   const jobId = randomUUID().slice(0, 8);
   const userId = req.user?.id ?? null;
 
@@ -74,8 +135,10 @@ router.post("/fleet/optimize", requireAuth, async (req: AuthedRequest, res: Resp
   res.json({
     job_id: jobId,
     transport_mode: result.transport_mode,
+    routed,
     original_route: result.original_route,
     optimized_route: result.optimized_route,
+    geometry,
     priority_explanation: result.priority_explanation,
     metrics: result.metrics,
   });

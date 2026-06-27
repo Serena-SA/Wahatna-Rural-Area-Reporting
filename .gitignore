@@ -47,3 +47,11 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local environment files (contain secrets — never commit)
+.env
+.env.*
+!.env.example
+
+# Runtime upload directory (multer-saved images)
+artifacts/api-server/uploads/

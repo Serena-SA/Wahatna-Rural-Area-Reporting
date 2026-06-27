@@ -26,6 +26,8 @@ import { useColors } from "@/hooks/useColors";
 
 type TransportMode = "walking" | "car" | "service_vehicle";
 
+type StartMethod = "gps" | "search" | "pin" | "manual";
+
 interface HistoryJob {
   jobId: string;
   transportMode: string | null;
@@ -74,6 +76,8 @@ interface RouteResult {
 interface FleetResult {
   job_id: string;
   transport_mode: string;
+  routed?: boolean;
+  geometry?: [number, number][];
   original_route: RouteResult;
   optimized_route: RouteResult;
   priority_explanation: string[];
@@ -181,11 +185,21 @@ export default function FleetScreen() {
   const rowDir: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
   const textAlign: "left" | "right" = isRTL ? "right" : "left";
 
-  // GPS start location
+  // Start location: method + the various sources
+  const [startMethod, setStartMethod] = useState<StartMethod>("gps");
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>("loading");
   const [gpsCoord, setGpsCoord] = useState<{ lat: number; lon: number } | null>(null);
   const [manualLat, setManualLat] = useState("");
   const [manualLon, setManualLon] = useState("");
+  // Start chosen via search or map pin
+  const [startOverride, setStartOverride] = useState<{ lat: number; lon: number; label?: string } | null>(null);
+
+  // Start-location place search (separate state from the waypoint search below)
+  const [startQuery, setStartQuery] = useState("");
+  const [startResults, setStartResults] = useState<GeoResult[]>([]);
+  const [startSearching, setStartSearching] = useState(false);
+  const [startSearchError, setStartSearchError] = useState("");
+  const startDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Transport mode
   const [transportMode, setTransportMode] = useState<TransportMode>("car");
@@ -216,6 +230,7 @@ export default function FleetScreen() {
   useEffect(() => {
     if (Platform.OS === "web") {
       setGpsStatus("denied");
+      setStartMethod((m) => (m === "gps" ? "search" : m));
       return;
     }
     (async () => {
@@ -223,6 +238,7 @@ export default function FleetScreen() {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           setGpsStatus("denied");
+          setStartMethod((m) => (m === "gps" ? "search" : m));
           return;
         }
         const pos = await Location.getCurrentPositionAsync({
@@ -232,8 +248,31 @@ export default function FleetScreen() {
         setGpsStatus("granted");
       } catch {
         setGpsStatus("denied");
+        setStartMethod((m) => (m === "gps" ? "search" : m));
       }
     })();
+  }, []);
+
+  // Re-request GPS on demand (e.g. user taps "Use my location"). Works on web
+  // too — the browser will prompt for geolocation permission.
+  const requestGps = useCallback(async () => {
+    setGpsStatus("loading");
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setGpsStatus("denied");
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      setGpsCoord({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      setGpsStatus("granted");
+      setStartOverride(null);
+      setResult(null);
+    } catch {
+      setGpsStatus("denied");
+    }
   }, []);
 
   // ── Fetch route history on mount ──────────────────────────────────────────
@@ -330,14 +369,71 @@ export default function FleetScreen() {
     setWaypoints((prev) => prev.map((w) => (w.id === id ? { ...w, label } : w)));
   }, []);
 
+  // ── Start location: search a place ────────────────────────────────────────
+
+  const runStartSearch = useCallback((q: string) => {
+    setStartQuery(q);
+    setStartSearchError("");
+    if (startDebounceRef.current) clearTimeout(startDebounceRef.current);
+    if (q.trim().length < 3) {
+      setStartResults([]);
+      setStartSearching(false);
+      return;
+    }
+    setStartSearching(true);
+    startDebounceRef.current = setTimeout(async () => {
+      try {
+        const r = await geocode(q);
+        setStartResults(r);
+        if (r.length === 0) setStartSearchError(t("fleet_no_results"));
+      } catch (e: unknown) {
+        setStartSearchError((e as Error).message || t("err_generic"));
+        setStartResults([]);
+      } finally {
+        setStartSearching(false);
+      }
+    }, 450);
+  }, [t]);
+
+  const selectStartPlace = useCallback((g: GeoResult) => {
+    setStartOverride({ lat: g.lat, lon: g.lon, label: g.label });
+    setStartQuery("");
+    setStartResults([]);
+    setStartSearchError("");
+    setResult(null);
+  }, []);
+
+  // Map pin-drop → set the start point
+  const handleStartPinDrop = useCallback((lat: number, lon: number) => {
+    setStartOverride({ lat, lon, label: t("fleet_start_pinned") });
+    setResult(null);
+  }, [t]);
+
+  const changeStartMethod = useCallback((m: StartMethod) => {
+    setStartMethod(m);
+    setStartSearchError("");
+    setResult(null);
+  }, []);
+
   // ── Get effective start coord ─────────────────────────────────────────────
 
   const getStart = (): { lat: number; lon: number } | null => {
-    if (gpsCoord) return gpsCoord;
-    const lat = parseFloat(manualLat);
-    const lon = parseFloat(manualLon);
-    if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
-    return null;
+    if (startMethod === "gps") return gpsCoord;
+    if (startMethod === "manual") {
+      const lat = parseFloat(manualLat);
+      const lon = parseFloat(manualLon);
+      if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
+      return null;
+    }
+    // search or pin
+    return startOverride ? { lat: startOverride.lat, lon: startOverride.lon } : null;
+  };
+
+  // Human-readable label for the start marker on the map
+  const startLabel = (): string => {
+    if (startMethod === "search" && startOverride?.label) return startOverride.label;
+    if (startMethod === "pin") return t("fleet_start_pinned");
+    return t("fleet_start_location");
   };
 
   // ── Optimize ─────────────────────────────────────────────────────────────
@@ -390,7 +486,7 @@ export default function FleetScreen() {
       const pts: MapPoint[] = [];
       const start = getStart();
       if (start) {
-        pts.push({ lat: start.lat, lon: start.lon, label: t("fleet_start_location"), kind: "start" });
+        pts.push({ lat: start.lat, lon: start.lon, label: startLabel(), kind: "start" });
       }
       result.optimized_route.stops.forEach((s) => {
         const origWp = waypoints[s.original_index];
@@ -408,23 +504,33 @@ export default function FleetScreen() {
     const pts: MapPoint[] = [];
     const start = getStart();
     if (start) {
-      pts.push({ lat: start.lat, lon: start.lon, label: t("fleet_start_location"), kind: "start" });
+      pts.push({ lat: start.lat, lon: start.lon, label: startLabel(), kind: "start" });
     }
     waypoints.forEach((w) => pts.push({ lat: w.lat, lon: w.lon, label: w.label, kind: "stop" }));
     return pts;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, waypoints, gpsCoord]);
+  }, [result, waypoints, gpsCoord, startOverride, startMethod, manualLat, manualLon]);
 
   const mapRoute = useMemo<[number, number][]>(() => {
     if (!result) return [];
+    // Prefer the real road geometry from the routing engine; fall back to a
+    // straight start→stops polyline when routing was unavailable.
+    if (result.geometry && result.geometry.length > 1) return result.geometry;
     const start = getStart();
     const pts: [number, number][] = start ? [[start.lat, start.lon]] : [];
     result.optimized_route.stops.forEach((s) => pts.push([s.lat, s.lon]));
     return pts;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, gpsCoord]);
+  }, [result, gpsCoord, startOverride, startMethod, manualLat, manualLon]);
 
   // ── Transport mode options ────────────────────────────────────────────────
+
+  const startMethodOptions: { key: StartMethod; label: string }[] = [
+    { key: "gps", label: t("fleet_start_gps") },
+    { key: "search", label: t("fleet_start_search") },
+    { key: "pin", label: t("fleet_start_pin") },
+    { key: "manual", label: t("fleet_start_manual") },
+  ];
 
   const modeOptions: { key: TransportMode; label: string }[] = [
     { key: "walking", label: t("fleet_walking") },
@@ -446,7 +552,19 @@ export default function FleetScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Map */}
-        <RouteMap points={mapPoints} route={mapRoute} height={240} />
+        <RouteMap
+          points={mapPoints}
+          route={mapRoute}
+          height={240}
+          pinDropEnabled={startMethod === "pin"}
+          pinMarker={
+            startMethod === "pin" && startOverride
+              ? { lat: startOverride.lat, lon: startOverride.lon }
+              : undefined
+          }
+          initialCenter={gpsCoord ? { lat: gpsCoord.lat, lon: gpsCoord.lon, zoom: 12 } : undefined}
+          onPinDrop={handleStartPinDrop}
+        />
 
         {/* ── Start Location ── */}
         <GlassCard padding={14} style={{ gap: 10 }}>
@@ -454,65 +572,158 @@ export default function FleetScreen() {
             {t("fleet_start_location").toUpperCase()}
           </Text>
 
-          {gpsStatus === "loading" && (
-            <View style={[styles.row, { flexDirection: rowDir, gap: 8 }]}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                {t("fleet_optimizing")}
+          {/* Method selector: GPS · Search · Pin on map · Manual */}
+          <ChipSelector
+            options={startMethodOptions}
+            value={startMethod}
+            onSelect={changeStartMethod}
+            colors={colors}
+          />
+
+          {/* GPS */}
+          {startMethod === "gps" && (
+            <>
+              {gpsStatus === "loading" && (
+                <View style={[styles.row, { flexDirection: rowDir, gap: 8 }]}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                    {t("fleet_optimizing")}
+                  </Text>
+                </View>
+              )}
+
+              {gpsStatus === "granted" && gpsCoord && (
+                <View style={[styles.gpsChip, { backgroundColor: colors.glowGreen, flexDirection: rowDir }]}>
+                  <Feather name="navigation" size={14} color={colors.primary} />
+                  <Text style={[styles.gpsChipText, { color: colors.primary }]}>
+                    {t("fleet_using_gps")} · {gpsCoord.lat.toFixed(4)}°, {gpsCoord.lon.toFixed(4)}°
+                  </Text>
+                </View>
+              )}
+
+              {gpsStatus === "denied" && (
+                <View style={{ gap: 8 }}>
+                  <View style={[styles.row, { flexDirection: rowDir, gap: 6 }]}>
+                    <Feather name="alert-circle" size={14} color={colors.danger} />
+                    <Text style={[styles.hintText, { color: colors.danger }]}>
+                      {t("fleet_gps_denied")}
+                    </Text>
+                  </View>
+                  <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign }]}>
+                    {Platform.OS === "ios"
+                      ? t("fleet_gps_instructions_ios")
+                      : t("fleet_gps_instructions_android")}
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                onPress={requestGps}
+                style={({ pressed }) => [
+                  styles.gpsBtn,
+                  { borderColor: colors.primary, opacity: pressed ? 0.6 : 1, flexDirection: rowDir },
+                ]}
+              >
+                <Feather name="crosshair" size={14} color={colors.primary} />
+                <Text style={[styles.gpsBtnText, { color: colors.primary }]}>{t("fleet_use_gps")}</Text>
+              </Pressable>
+            </>
+          )}
+
+          {/* Search a place */}
+          {startMethod === "search" && (
+            <>
+              <View style={[styles.searchRow, { flexDirection: rowDir }]}>
+                <Feather name="search" size={16} color={colors.mutedForeground} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.text }]}
+                  placeholder={t("fleet_start_search_placeholder")}
+                  placeholderTextColor={colors.mutedForeground}
+                  value={startQuery}
+                  onChangeText={runStartSearch}
+                  autoCorrect={false}
+                />
+                {startSearching && <ActivityIndicator size="small" color={colors.primary} />}
+              </View>
+
+              {!!startSearchError && (
+                <Text style={[styles.hintText, { color: colors.danger, textAlign }]}>{startSearchError}</Text>
+              )}
+
+              {startResults.map((g, i) => (
+                <Pressable
+                  key={`${g.lat}-${g.lon}-${i}`}
+                  onPress={() => selectStartPlace(g)}
+                  style={({ pressed }) => [
+                    styles.resultRow,
+                    { borderColor: colors.border, opacity: pressed ? 0.6 : 1, flexDirection: rowDir },
+                  ]}
+                >
+                  <Feather name="map-pin" size={14} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.resultLabel, { color: colors.text, textAlign }]} numberOfLines={1}>
+                      {g.label}
+                    </Text>
+                    <Text style={[styles.resultAddr, { color: colors.mutedForeground, textAlign }]} numberOfLines={1}>
+                      {g.address}
+                    </Text>
+                  </View>
+                  <Feather name="plus-circle" size={18} color={colors.primary} />
+                </Pressable>
+              ))}
+            </>
+          )}
+
+          {/* Pin on map */}
+          {startMethod === "pin" && (
+            <View style={[styles.row, { flexDirection: rowDir, gap: 6 }]}>
+              <Feather name="map-pin" size={14} color={colors.primary} />
+              <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign, flex: 1 }]}>
+                {t("fleet_start_pin_hint")}
               </Text>
             </View>
           )}
 
-          {gpsStatus === "granted" && gpsCoord && (
-            <View style={[styles.gpsChip, { backgroundColor: colors.glowGreen, flexDirection: rowDir }]}>
-              <Feather name="navigation" size={14} color={colors.primary} />
-              <Text style={[styles.gpsChipText, { color: colors.primary }]}>
-                {t("fleet_using_gps")} · {gpsCoord.lat.toFixed(4)}°, {gpsCoord.lon.toFixed(4)}°
-              </Text>
-            </View>
-          )}
-
-          {gpsStatus === "denied" && (
-            <View style={{ gap: 10 }}>
-              <View style={[styles.row, { flexDirection: rowDir, gap: 6 }]}>
-                <Feather name="alert-circle" size={14} color={colors.danger} />
-                <Text style={[styles.hintText, { color: colors.danger }]}>
-                  {t("fleet_gps_denied")}
+          {/* Manual coordinates */}
+          {startMethod === "manual" && (
+            <View style={[styles.coordRow, { flexDirection: rowDir, gap: 8 }]}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
+                  {t("fleet_manual_lat")}
                 </Text>
+                <TextInput
+                  style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
+                  value={manualLat}
+                  onChangeText={(v) => { setManualLat(v); setResult(null); }}
+                  keyboardType="decimal-pad"
+                  placeholder="24.1234"
+                  placeholderTextColor={colors.mutedForeground}
+                />
               </View>
-              <Text style={[styles.hintText, { color: colors.mutedForeground, textAlign }]}>
-                {Platform.OS === "ios"
-                  ? t("fleet_gps_instructions_ios")
-                  : t("fleet_gps_instructions_android")}
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
+                  {t("fleet_manual_lon")}
+                </Text>
+                <TextInput
+                  style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
+                  value={manualLon}
+                  onChangeText={(v) => { setManualLon(v); setResult(null); }}
+                  keyboardType="decimal-pad"
+                  placeholder="55.5678"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Selected start summary (search / pin) */}
+          {(startMethod === "search" || startMethod === "pin") && startOverride && (
+            <View style={[styles.gpsChip, { backgroundColor: colors.glowGreen, flexDirection: rowDir }]}>
+              <Feather name="check-circle" size={14} color={colors.primary} />
+              <Text style={[styles.gpsChipText, { color: colors.primary }]} numberOfLines={1}>
+                {startOverride.label ? `${startOverride.label} · ` : ""}
+                {startOverride.lat.toFixed(4)}°, {startOverride.lon.toFixed(4)}°
               </Text>
-              <View style={[styles.coordRow, { flexDirection: rowDir, gap: 8 }]}>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
-                    {t("fleet_manual_lat")}
-                  </Text>
-                  <TextInput
-                    style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
-                    value={manualLat}
-                    onChangeText={setManualLat}
-                    keyboardType="decimal-pad"
-                    placeholder="24.1234"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[styles.coordLabel, { color: colors.mutedForeground, textAlign }]}>
-                    {t("fleet_manual_lon")}
-                  </Text>
-                  <TextInput
-                    style={[styles.coordInput, { color: colors.text, borderColor: colors.border }]}
-                    value={manualLon}
-                    onChangeText={setManualLon}
-                    keyboardType="decimal-pad"
-                    placeholder="55.5678"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-              </View>
             </View>
           )}
         </GlassCard>
@@ -794,9 +1005,9 @@ export default function FleetScreen() {
               </View>
             </View>
 
-            {/* Job ID */}
+            {/* Job ID + routing source */}
             <Text style={[styles.jobId, { color: colors.mutedForeground, textAlign }]}>
-              {t("fleet_job_id")} #{result.job_id} · {result.transport_mode} · {result.metrics.speed_kmh} {t("fleet_kmh")}
+              {t("fleet_job_id")} #{result.job_id} · {result.transport_mode} · {result.metrics.speed_kmh} {t("fleet_kmh")} · {result.routed ? t("fleet_routed_roads") : t("fleet_routed_straight")}
             </Text>
           </Animated.View>
         )}
@@ -903,6 +1114,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   gpsChipText: { fontSize: 13, fontWeight: "600" as const, flexShrink: 1 },
+  gpsBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
+  gpsBtnText: { fontSize: 12, fontWeight: "600" as const },
   coordRow: { alignItems: "flex-end" },
   coordLabel: { fontSize: 11, fontWeight: "600" as const },
   coordInput: {

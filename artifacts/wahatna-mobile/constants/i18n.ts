@@ -187,6 +187,16 @@ export interface Translations {
   fleet_manual_lat: string;
   fleet_manual_lon: string;
   fleet_no_results: string;
+  fleet_start_gps: string;
+  fleet_start_search: string;
+  fleet_start_pin: string;
+  fleet_start_manual: string;
+  fleet_start_search_placeholder: string;
+  fleet_start_pin_hint: string;
+  fleet_start_pinned: string;
+  fleet_use_gps: string;
+  fleet_routed_roads: string;
+  fleet_routed_straight: string;
   fleet_priority: string;
   fleet_min_waypoints: string;
   fleet_no_start: string;
@@ -401,6 +411,16 @@ const en: Translations = {
   fleet_manual_lat: "Latitude",
   fleet_manual_lon: "Longitude",
   fleet_no_results: "No places found",
+  fleet_start_gps: "GPS",
+  fleet_start_search: "Search",
+  fleet_start_pin: "Pin on map",
+  fleet_start_manual: "Manual",
+  fleet_start_search_placeholder: "Search a place…",
+  fleet_start_pin_hint: "Tap the map above to set your start point",
+  fleet_start_pinned: "Pinned location",
+  fleet_use_gps: "Use my location",
+  fleet_routed_roads: "Routed on real roads",
+  fleet_routed_straight: "Straight-line estimate",
   fleet_priority: "Priority",
   fleet_min_waypoints: "Add at least one destination waypoint",
   fleet_no_start: "Start location unavailable",
@@ -612,6 +632,16 @@ const ar: Translations = {
   fleet_manual_lat: "خط العرض",
   fleet_manual_lon: "خط الطول",
   fleet_no_results: "لم يتم العثور على أماكن",
+  fleet_start_gps: "GPS",
+  fleet_start_search: "بحث",
+  fleet_start_pin: "تحديد على الخريطة",
+  fleet_start_manual: "يدوي",
+  fleet_start_search_placeholder: "ابحث عن مكان…",
+  fleet_start_pin_hint: "انقر على الخريطة أعلاه لتحديد نقطة البداية",
+  fleet_start_pinned: "موقع محدد",
+  fleet_use_gps: "استخدم موقعي",
+  fleet_routed_roads: "موجَّه على طرق حقيقية",
+  fleet_routed_straight: "تقدير بخط مستقيم",
   fleet_priority: "الأولوية",
   fleet_min_waypoints: "أضف نقطة وجهة واحدة على الأقل",
   fleet_no_start: "موقع البداية غير متاح",
@@ -823,6 +853,16 @@ const ur: Translations = {
   fleet_manual_lat: "عرض البلد",
   fleet_manual_lon: "طول البلد",
   fleet_no_results: "کوئی جگہ نہیں ملی",
+  fleet_start_gps: "GPS",
+  fleet_start_search: "تلاش",
+  fleet_start_pin: "نقشے پر نشان لگائیں",
+  fleet_start_manual: "دستی",
+  fleet_start_search_placeholder: "کوئی جگہ تلاش کریں…",
+  fleet_start_pin_hint: "آغاز کا مقام مقرر کرنے کے لیے اوپر نقشے پر ٹیپ کریں",
+  fleet_start_pinned: "مقررہ مقام",
+  fleet_use_gps: "میرا مقام استعمال کریں",
+  fleet_routed_roads: "اصل سڑکوں پر روٹ",
+  fleet_routed_straight: "سیدھی لکیر کا تخمینہ",
   fleet_priority: "ترجیح",
   fleet_min_waypoints: "کم از کم ایک منزل کا نقطہ شامل کریں",
   fleet_no_start: "آغاز کا مقام دستیاب نہیں",
@@ -1034,6 +1074,16 @@ const hi: Translations = {
   fleet_manual_lat: "अक्षांश",
   fleet_manual_lon: "देशांतर",
   fleet_no_results: "कोई स्थान नहीं मिला",
+  fleet_start_gps: "GPS",
+  fleet_start_search: "खोज",
+  fleet_start_pin: "मानचित्र पर पिन करें",
+  fleet_start_manual: "मैनुअल",
+  fleet_start_search_placeholder: "कोई स्थान खोजें…",
+  fleet_start_pin_hint: "आरंभ बिंदु सेट करने के लिए ऊपर मानचित्र पर टैप करें",
+  fleet_start_pinned: "पिन किया गया स्थान",
+  fleet_use_gps: "मेरा स्थान उपयोग करें",
+  fleet_routed_roads: "वास्तविक सड़कों पर मार्ग",
+  fleet_routed_straight: "सीधी रेखा अनुमान",
   fleet_priority: "प्राथमिकता",
   fleet_min_waypoints: "कम से कम एक गंतव्य वेपॉइंट जोड़ें",
   fleet_no_start: "प्रारंभ स्थान अनुपलब्ध",
