@@ -73,6 +73,9 @@ export const incidentsTable = pgTable("incidents", {
 export const fleetWaypointsTable = pgTable("fleet_waypoints", {
   id: serial("id").primaryKey(),
   jobId: text("job_id"),
+  userId: integer("user_id").references(() => usersTable.id),
+  transportMode: text("transport_mode"),
+  totalDistanceKm: doublePrecision("total_distance_km"),
   lat: doublePrecision("lat").notNull(),
   lon: doublePrecision("lon").notNull(),
   label: text("label"),

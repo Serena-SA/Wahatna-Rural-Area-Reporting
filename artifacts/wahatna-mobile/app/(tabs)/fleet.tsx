@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "@/components/GlassCard";
 import { RouteMap } from "@/components/RouteMap";
-import { apiPost, geocode, type GeoResult } from "@/constants/api";
+import { apiGet, apiPost, geocode, type GeoResult } from "@/constants/api";
 import type { MapPoint } from "@/constants/mapHtml";
 import { useAuth } from "@/context/AuthContext";
 import { useTranslation } from "@/context/LanguageContext";
@@ -25,6 +25,25 @@ import { useColors } from "@/hooks/useColors";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type TransportMode = "walking" | "car" | "service_vehicle";
+
+interface HistoryJob {
+  jobId: string;
+  transportMode: string | null;
+  totalDistanceKm: number | null;
+  stopCount: number;
+  createdAt: string;
+}
+
+interface HistoryStop {
+  id: number;
+  jobId: string | null;
+  lat: number;
+  lon: number;
+  label: string | null;
+  optimizedOrder: number | null;
+  distanceToNextKm: number | null;
+}
+
 type GpsStatus = "loading" | "granted" | "denied";
 
 interface WaypointItem {
@@ -187,6 +206,11 @@ export default function FleetScreen() {
   const [error, setError] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Route History
+  const [history, setHistory] = useState<HistoryJob[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [replayingJobId, setReplayingJobId] = useState<string | null>(null);
+
   // ── Auto-detect GPS on mount ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -211,6 +235,49 @@ export default function FleetScreen() {
       }
     })();
   }, []);
+
+  // ── Fetch route history on mount ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (!token) return;
+    setHistoryLoading(true);
+    apiGet<{ jobs: HistoryJob[] }>("/fleet/jobs", token)
+      .then((data) => setHistory(data.jobs))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [token]);
+
+  // ── Replay a past job ─────────────────────────────────────────────────────
+
+  const replayJob = useCallback(async (jobId: string) => {
+    if (!token) return;
+    setReplayingJobId(jobId);
+    try {
+      const data = await apiGet<{ job_id: string; stops: HistoryStop[] }>(
+        `/fleet/jobs/${jobId}`,
+        token
+      );
+      const stops = data.stops.sort(
+        (a, b) => (a.optimizedOrder ?? 0) - (b.optimizedOrder ?? 0)
+      );
+      setWaypoints(
+        stops.map((s, i) => ({
+          id: `replay_${jobId}_${i}`,
+          label: s.label ?? `Stop ${i + 1}`,
+          lat: s.lat,
+          lon: s.lon,
+          priority: 2,
+        }))
+      );
+      setResult(null);
+      setError("");
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      setError(t("err_generic"));
+    } finally {
+      setReplayingJobId(null);
+    }
+  }, [token, t]);
 
   // ── Search ────────────────────────────────────────────────────────────────
 
@@ -305,6 +372,10 @@ export default function FleetScreen() {
       setResult(res);
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Refresh history list so new job appears immediately
+      apiGet<{ jobs: HistoryJob[] }>("/fleet/jobs", token)
+        .then((data) => setHistory(data.jobs))
+        .catch(() => {});
     } catch (e: unknown) {
       setError((e as Error).message || t("err_generic"));
     } finally {
@@ -729,6 +800,91 @@ export default function FleetScreen() {
             </Text>
           </Animated.View>
         )}
+
+        {/* ── Route History ── */}
+        <GlassCard padding={14} style={{ gap: 10 }}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground, textAlign }]}>
+            {t("fleet_history_title").toUpperCase()}
+          </Text>
+
+          {historyLoading ? (
+            <View style={[styles.row, { flexDirection: rowDir, gap: 8 }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                {t("fleet_history_loading")}
+              </Text>
+            </View>
+          ) : history.length === 0 ? (
+            <View style={[styles.emptyBox, { paddingVertical: 12 }]}>
+              <Feather name="clock" size={20} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground, textAlign: "center" }]}>
+                {t("fleet_history_empty")}
+              </Text>
+            </View>
+          ) : (
+            history.map((job) => {
+              const date = new Date(job.createdAt);
+              const dateStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+              const isReplaying = replayingJobId === job.jobId;
+              return (
+                <View
+                  key={job.jobId}
+                  style={[
+                    styles.historyRow,
+                    { flexDirection: rowDir, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={[{ flexDirection: rowDir, gap: 6, alignItems: "center" }]}>
+                      <Text style={[styles.historyJobId, { color: colors.text }]}>
+                        #{job.jobId}
+                      </Text>
+                      {job.transportMode && (
+                        <View style={[styles.historyModeBadge, { backgroundColor: colors.primary + "22" }]}>
+                          <Text style={[styles.historyModeText, { color: colors.primary }]}>
+                            {job.transportMode.replace("_", " ")}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.historyMeta, { color: colors.mutedForeground, textAlign }]}>
+                      {job.stopCount} {t("fleet_history_stops")}
+                      {job.totalDistanceKm != null
+                        ? ` · ${job.totalDistanceKm.toFixed(1)} ${t("fleet_km")}`
+                        : ""}
+                    </Text>
+                    <Text style={[styles.historyDate, { color: colors.mutedForeground, textAlign }]}>
+                      {dateStr}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => replayJob(job.jobId)}
+                    disabled={isReplaying}
+                    style={({ pressed }) => [
+                      styles.historyReplayBtn,
+                      {
+                        backgroundColor: colors.primary + "22",
+                        borderColor: colors.primary,
+                        opacity: pressed || isReplaying ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    {isReplaying ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <>
+                        <Feather name="rotate-ccw" size={13} color={colors.primary} />
+                        <Text style={[styles.historyReplayText, { color: colors.primary }]}>
+                          {t("fleet_history_view")}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
+        </GlassCard>
       </ScrollView>
     </View>
   );
@@ -853,4 +1009,32 @@ const styles = StyleSheet.create({
   compKm: { fontSize: 10 },
   priorityNote: { fontSize: 10, fontStyle: "italic" as const, marginLeft: 14 },
   jobId: { fontSize: 10 },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  historyJobId: { fontSize: 13, fontWeight: "700" as const },
+  historyModeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  historyModeText: { fontSize: 10, fontWeight: "600" as const, textTransform: "capitalize" as const },
+  historyMeta: { fontSize: 12 },
+  historyDate: { fontSize: 11 },
+  historyReplayBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    minWidth: 60,
+    justifyContent: "center",
+  },
+  historyReplayText: { fontSize: 12, fontWeight: "600" as const },
 });

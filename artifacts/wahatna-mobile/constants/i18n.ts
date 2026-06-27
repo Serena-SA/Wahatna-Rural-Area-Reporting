@@ -199,6 +199,11 @@ export interface Translations {
   fleet_kmh: string;
   fleet_gps_instructions_ios: string;
   fleet_gps_instructions_android: string;
+  fleet_history_title: string;
+  fleet_history_empty: string;
+  fleet_history_stops: string;
+  fleet_history_view: string;
+  fleet_history_loading: string;
 
   // ── Heat ban ───────────────────────────────────────────────────
   heat_ban_title: string;
@@ -408,6 +413,11 @@ const en: Translations = {
   fleet_kmh: "km/h",
   fleet_gps_instructions_ios: "Open Settings → Privacy & Security → Location Services and enable access for this app.",
   fleet_gps_instructions_android: "Open Settings → Apps → select this app → Permissions → Location → Allow.",
+  fleet_history_title: "Route History",
+  fleet_history_empty: "No past routes yet",
+  fleet_history_stops: "stops",
+  fleet_history_view: "View",
+  fleet_history_loading: "Loading history…",
 
   heat_ban_title: "Heat Work Ban",
   heat_ban_body: "MOHRE ban: outdoor work prohibited 12:30–15:00 (15 Jun – 15 Sep).",
@@ -614,6 +624,11 @@ const ar: Translations = {
   fleet_kmh: "كم/س",
   fleet_gps_instructions_ios: "افتح الإعدادات ← الخصوصية والأمان ← خدمات الموقع وفعّل الوصول لهذا التطبيق.",
   fleet_gps_instructions_android: "افتح الإعدادات ← التطبيقات ← اختر التطبيق ← الأذونات ← الموقع ← السماح.",
+  fleet_history_title: "سجل المسارات",
+  fleet_history_empty: "لا توجد مسارات سابقة بعد",
+  fleet_history_stops: "محطات",
+  fleet_history_view: "عرض",
+  fleet_history_loading: "جارٍ تحميل السجل…",
 
   heat_ban_title: "حظر العمل في الحر",
   heat_ban_body: "حظر وزارة الموارد البشرية: العمل في الخارج ممنوع 12:30–15:00 (15 يونيو–15 سبتمبر).",
@@ -820,6 +835,11 @@ const ur: Translations = {
   fleet_kmh: "کلومیٹر/گھنٹہ",
   fleet_gps_instructions_ios: "Settings ← Privacy & Security ← Location Services کھولیں اور اس ایپ کے لیے رسائی فعال کریں۔",
   fleet_gps_instructions_android: "Settings ← Apps ← یہ ایپ ← Permissions ← Location ← Allow کھولیں۔",
+  fleet_history_title: "راستے کی تاریخ",
+  fleet_history_empty: "ابھی تک کوئی پرانا راستہ نہیں",
+  fleet_history_stops: "اسٹاپ",
+  fleet_history_view: "دیکھیں",
+  fleet_history_loading: "تاریخ لوڈ ہو رہی ہے…",
 
   heat_ban_title: "گرمی کام پابندی",
   heat_ban_body: "MOHRE پابندی: 12:30–15:00 بیرونی کام ممنوع (15 جون–15 ستمبر)۔",
@@ -1026,6 +1046,11 @@ const hi: Translations = {
   fleet_kmh: "कि.मी./घंटा",
   fleet_gps_instructions_ios: "Settings → Privacy & Security → Location Services खोलें और इस ऐप के लिए एक्सेस सक्षम करें।",
   fleet_gps_instructions_android: "Settings → Apps → यह ऐप → Permissions → Location → Allow खोलें।",
+  fleet_history_title: "रूट इतिहास",
+  fleet_history_empty: "अभी तक कोई पुराना रूट नहीं",
+  fleet_history_stops: "स्टॉप",
+  fleet_history_view: "देखें",
+  fleet_history_loading: "इतिहास लोड हो रहा है…",
 
   heat_ban_title: "गर्मी कार्य प्रतिबंध",
   heat_ban_body: "MOHRE प्रतिबंध: 12:30–15:00 बाहरी कार्य निषिद्ध (15 जून–15 सितंबर)।",

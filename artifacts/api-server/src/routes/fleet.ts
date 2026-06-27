@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import { eq, desc, sql } from "drizzle-orm";
 import { db, fleetWaypointsTable } from "@workspace/db";
 import { requireAuth, type AuthedRequest } from "../lib/auth";
 import { optimizeFleetRoute, type Coord, type FleetWaypoint } from "../lib/optimizer";
@@ -53,11 +54,15 @@ router.post("/fleet/optimize", requireAuth, async (req: AuthedRequest, res: Resp
 
   const result = optimizeFleetRoute(start, destinations, transportMode, 100, 200);
   const jobId = randomUUID().slice(0, 8);
+  const userId = req.user?.id ?? null;
 
   // Persist optimized stops to DB
   await db.insert(fleetWaypointsTable).values(
     result.optimized_route.stops.map((item) => ({
       jobId,
+      userId,
+      transportMode,
+      totalDistanceKm: result.optimized_route.total_distance_km,
       lat: item.lat,
       lon: item.lon,
       label: item.label,
@@ -74,6 +79,59 @@ router.post("/fleet/optimize", requireAuth, async (req: AuthedRequest, res: Resp
     priority_explanation: result.priority_explanation,
     metrics: result.metrics,
   });
+});
+
+router.get("/fleet/jobs", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ detail: "Unauthorized" });
+    return;
+  }
+
+  // Return recent jobs grouped by job_id for this user
+  const rows = await db
+    .select({
+      jobId: fleetWaypointsTable.jobId,
+      transportMode: fleetWaypointsTable.transportMode,
+      totalDistanceKm: fleetWaypointsTable.totalDistanceKm,
+      stopCount: sql<number>`cast(count(*) as integer)`,
+      createdAt: sql<string>`min(${fleetWaypointsTable.createdAt})`,
+    })
+    .from(fleetWaypointsTable)
+    .where(eq(fleetWaypointsTable.userId, userId))
+    .groupBy(
+      fleetWaypointsTable.jobId,
+      fleetWaypointsTable.transportMode,
+      fleetWaypointsTable.totalDistanceKm,
+    )
+    .orderBy(desc(sql`min(${fleetWaypointsTable.createdAt})`))
+    .limit(20);
+
+  res.json({ jobs: rows });
+});
+
+router.get("/fleet/jobs/:jobId", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ detail: "Unauthorized" });
+    return;
+  }
+  const jobId = String(req.params.jobId);
+
+  const stops = await db
+    .select()
+    .from(fleetWaypointsTable)
+    .where(
+      sql`${fleetWaypointsTable.jobId} = ${jobId} AND ${fleetWaypointsTable.userId} = ${userId}`
+    )
+    .orderBy(fleetWaypointsTable.optimizedOrder);
+
+  if (stops.length === 0) {
+    res.status(404).json({ detail: "Job not found" });
+    return;
+  }
+
+  res.json({ job_id: jobId, stops });
 });
 
 export default router;
