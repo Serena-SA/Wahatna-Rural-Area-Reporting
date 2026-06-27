@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, lt, not, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, lt, not, inArray } from "drizzle-orm";
 import { db, incidentsTable, usersTable, reportsTable } from "@workspace/db";
 import { requireAuth, requireSupervisor, type AuthedRequest } from "../lib/auth";
 import { reportDict } from "../lib/serialize";
@@ -311,8 +311,8 @@ router.delete(
 );
 
 /** POST /api/supervisor/reports/clear-demo — delete all seeded demo reports.
- *  Seed data is the only data with a non-null confidence (real community
- *  reports leave confidence null because the CV classifier is stubbed). */
+ *  Seed rows are flagged with is_seed=true at seed time; real community reports
+ *  (which now carry a real YOLO confidence) are never matched. */
 router.post(
   "/supervisor/reports/clear-demo",
   requireAuth,
@@ -321,7 +321,7 @@ router.post(
     const demo = await db
       .select({ id: incidentsTable.id })
       .from(incidentsTable)
-      .where(isNotNull(incidentsTable.confidence));
+      .where(eq(incidentsTable.isSeed, true));
     const ids = demo.map((d) => d.id);
 
     if (ids.length > 0) {

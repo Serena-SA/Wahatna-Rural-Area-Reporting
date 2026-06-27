@@ -55,3 +55,11 @@ Thumbs.db
 
 # Runtime upload directory (multer-saved images)
 artifacts/api-server/uploads/
+
+# Python virtualenv + caches for the local YOLO detector (the .pt model IS tracked)
+artifacts/api-server/ml/.venv/
+**/__pycache__/
+*.pyc
+
+# Local tooling / launch configs created during dev sessions
+.claude/

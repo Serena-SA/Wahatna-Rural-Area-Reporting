@@ -37,6 +37,15 @@ export const incidentsTable = pgTable("incidents", {
   threatClass: text("threat_class").notNull(),
   threatLabel: text("threat_label"),
   confidence: doublePrecision("confidence"),
+  // YOLO detections (JSON: [{label, confidence, box:[x1,y1,x2,y2] normalised 0-1}]).
+  detections: text("detections"),
+  // AI assessment provenance, e.g. "yolo+k2", "user+k2", "user+local", "offline".
+  analysisSource: text("analysis_source"),
+  // Estimated government resolution time from K2 Think, human-readable.
+  etaText: text("eta_text"),
+  // Marks seeded demo rows so "Clear demo data" never touches real reports
+  // (real reports now carry a real YOLO confidence, so confidence is no longer a marker).
+  isSeed: boolean("is_seed").default(false),
   severity: integer("severity").default(3),
   severityLabel: text("severity_label").default("elevated"),
   secondaryThreats: text("secondary_threats"),

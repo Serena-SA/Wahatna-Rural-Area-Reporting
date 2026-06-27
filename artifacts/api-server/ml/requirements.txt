@@ -1,0 +1,4 @@
+# Local YOLO hazard detector (Wahatna). Install into ml/.venv:
+#   python -m venv ml/.venv
+#   ml/.venv/Scripts/python -m pip install -r ml/requirements.txt
+ultralytics>=8.3.0

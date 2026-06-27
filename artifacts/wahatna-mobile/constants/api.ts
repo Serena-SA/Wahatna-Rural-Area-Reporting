@@ -1,8 +1,6 @@
-const getBaseUrl = () => {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (!domain) return "http://localhost:8080/api";
-  return `https://${domain}/api`;
-};
+import { apiBase } from "@/constants/env";
+
+const getBaseUrl = () => apiBase();
 
 export async function apiFetch(
   path: string,

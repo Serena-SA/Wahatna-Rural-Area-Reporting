@@ -30,12 +30,25 @@ export function reportDict(incident: Incident): Record<string, unknown> {
     statusHistory = [];
   }
 
+  let detections: unknown[] = [];
+  try {
+    if (incident.detections) {
+      detections = JSON.parse(incident.detections);
+    }
+  } catch {
+    detections = [];
+  }
+
   return {
     id: incident.id,
     reference: `WAH-${String(incident.id).padStart(5, "0")}`,
     title: incident.threatLabel || incident.threatClass,
     threat_class: incident.threatClass,
     threat_label: incident.threatLabel,
+    confidence: incident.confidence,
+    detections,
+    analysis_source: incident.analysisSource,
+    eta_text: incident.etaText,
     description: incident.reportText || incident.assessmentSummary || "",
     status: incident.status ?? "pending_review",
     severity: incident.severity ?? 3,

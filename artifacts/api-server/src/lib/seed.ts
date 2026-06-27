@@ -195,6 +195,7 @@ async function seedIncidents(userIds: number[]): Promise<void> {
       threatClass,
       threatLabel,
       confidence: Math.round(rngUniform(rng, 0.65, 0.97) * 1000) / 1000,
+      isSeed: true,
       severity: sev,
       severityLabel: sevLabel,
       secondaryThreats: JSON.stringify(

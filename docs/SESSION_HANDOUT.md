@@ -93,7 +93,7 @@ The supervisor "Reports" tab was a dead placeholder (infinite spinner). Rebuilt 
 ### 3.7 Delete reports ("remove dummies")
 - **Per-report delete** + **bulk "Clear demo data"**, both **permanent (hard delete)**, FK-safe (removes dependent `reports` rows first).
 - Endpoints: `DELETE /api/supervisor/reports/:id`, `POST /api/supervisor/reports/clear-demo`.
-- "Demo" = seeded rows, identified by **non-null `confidence`** (real reports always leave confidence null because the CV classifier is stubbed). Verified: clear-demo removed the seeds and **kept the real user report**.
+- "Demo" = seeded rows, now flagged with **`is_seed=true`** at seed time. (Previously this keyed off non-null `confidence`; real reports now carry a real YOLO confidence, so the flag replaced that discriminator.) Real reports are never matched.
 
 ### 3.8 Heat compliance — surfacing (Al Qua'a specific)
 - **Home banner (always on)**: live **Open-Meteo** temperature at Al Qua'a (23.83°N, 55.73°E — free, no key), MOHRE midday-ban status (active / "Ban starts in …" / none), the **Tropic of Cancer** line, and coordinates.
@@ -169,7 +169,7 @@ ORS `radiuses` fix + dashed fallback · Reports-tab rebuild · delete (per-repor
 - **"Worker notified" of dispatch** — the dispatch is recorded and returned in report data, but **not yet surfaced on the worker's My Reports screen**. (Easy add if you want it.)
 - **Some rural points aren't car-routable** — if OSM has no drivable road to a point, car/truck show a dashed straight-line estimate; walking usually routes. This is map-data reality, handled gracefully.
 - **Fleet visiting order** still uses straight-line (Haversine) distance for the genetic-algorithm ordering; the *drawn route and all distances/times* are real roads. A road distance-matrix for ordering is a possible enhancement.
-- **CV classifier** remains stubbed (`vision.ts`) — `confidence` is always null for real reports (which is what powers the clear-demo discriminator).
+- **CV classifier is now REAL** — a trained YOLO11n model runs locally and K2 Think V2 triages the result (severity + government resolution ETA). See **`docs/AI_PIPELINE.md`** for the full pipeline, the `K2THINK_API_KEY` location, and how to run the local detector. The old `vision.ts` category→profile map is still used to derive protocol/regulatory text from the K2-chosen category.
 - Mobile **native** (iOS/Android via Expo Go / EAS) wasn't run this session — only the **web** build. The `dev` script needs adapting for native off-Replit (LAN IP for the API, etc.).
 
 ---

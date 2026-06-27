@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { apiGet } from "@/constants/api";
+import { apiOrigin } from "@/constants/env";
 import { useAuth } from "@/context/AuthContext";
 import { useTranslation } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
@@ -29,9 +30,7 @@ interface StatusHistoryEntry {
 
 function getImageUrl(imageUrl: string | null): string | null {
   if (!imageUrl) return null;
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}` : "http://localhost:8080";
-  return `${base}${imageUrl}`;
+  return `${apiOrigin()}${imageUrl}`;
 }
 
 interface Report {

@@ -52,6 +52,19 @@ export interface Translations {
   home_bg_auto: string;
   home_bg_day: string;
   home_bg_night: string;
+  about_section_title: string;
+  about_what_title: string;
+  about_what_body: string;
+  about_alquaa_title: string;
+  about_alquaa_body: string;
+  about_report_title: string;
+  about_report_body: string;
+  about_heat_title: string;
+  about_heat_body: string;
+  about_offline_title: string;
+  about_offline_body: string;
+  about_community_title: string;
+  about_community_body: string;
 
   // ── Report flow ────────────────────────────────────────────────
   report_title: string;
@@ -103,6 +116,16 @@ export interface Translations {
   confirm_reference: string;
   confirm_status: string;
   confirm_expected: string;
+  confirm_hazard_type: string;
+  confirm_severity: string;
+  confirm_analyzed_by: string;
+  report_analyzing_title: string;
+  report_analyzing_sub: string;
+  report_detected: string;
+  report_detected_none: string;
+  report_k2_title: string;
+  report_k2_sub: string;
+  offline_ai_note: string;
   confirm_track: string;
   confirm_another: string;
 
@@ -306,6 +329,19 @@ const en: Translations = {
   home_bg_auto: "Auto",
   home_bg_day: "Day",
   home_bg_night: "Night",
+  about_section_title: "About Wahatna",
+  about_what_title: "What is Wahatna?",
+  about_what_body: "A rural safety platform for reporting and managing hazards across Al Qua'a.",
+  about_alquaa_title: "Why Al Qua'a?",
+  about_alquaa_body: "Rural, spread out, and extremely hot — with farms and camel facilities that are harder to serve with normal urban response.",
+  about_report_title: "Why your report matters",
+  about_report_body: "One report helps supervisors locate the issue, prioritize the response, and stop a small hazard from becoming an emergency.",
+  about_heat_title: "Heat safety notice",
+  about_heat_body: "During extreme heat and the midday ban, Wahatna flags unsafe outdoor conditions and supports safer dispatch.",
+  about_offline_title: "Works offline",
+  about_offline_body: "Weak signal? Your report is saved and synced later, so poor coverage never blocks a rural report.",
+  about_community_title: "Built for the community",
+  about_community_body: "Available in English, Arabic, Urdu, and Hindi — reporting that fits the people who live and work here.",
 
   report_title: "Report Hazard",
   report_step_category: "Category & Details",
@@ -353,6 +389,16 @@ const en: Translations = {
   confirm_reference: "Reference",
   confirm_status: "Status",
   confirm_expected: "Expected response",
+  confirm_hazard_type: "Hazard type",
+  confirm_severity: "Severity",
+  confirm_analyzed_by: "Analyzed by",
+  report_analyzing_title: "Scanning photo…",
+  report_analyzing_sub: "Running local hazard detection (YOLO) on your photo.",
+  report_detected: "Detected",
+  report_detected_none: "No hazard detected in the photo — using your selected category.",
+  report_k2_title: "K2 Think V2 thinking…",
+  report_k2_sub: "Analyzing the detection and your description to set hazard type, severity, and response time.",
+  offline_ai_note: "Detection and AI triage will run automatically when you're back online.",
   confirm_track: "Track This Report",
   confirm_another: "Report Another Hazard",
 
@@ -549,6 +595,19 @@ const ar: Translations = {
   home_bg_auto: "تلقائي",
   home_bg_day: "نهار",
   home_bg_night: "ليل",
+  about_section_title: "عن وَهَتنا",
+  about_what_title: "ما هي وَهَتنا؟",
+  about_what_body: "منصة سلامة ريفية للإبلاغ عن المخاطر وإدارتها في منطقة القوع.",
+  about_alquaa_title: "لماذا القوع؟",
+  about_alquaa_body: "منطقة ريفية ومتباعدة وشديدة الحرارة، بها مزارع ومرافق إبل يصعب خدمتها بأنظمة الاستجابة الحضرية المعتادة.",
+  about_report_title: "لماذا بلاغك مهم",
+  about_report_body: "بلاغ واحد يساعد المشرفين على تحديد المشكلة وترتيب أولويات الاستجابة ومنع تحوّل خطر صغير إلى طارئ.",
+  about_heat_title: "تنبيه السلامة من الحر",
+  about_heat_body: "أثناء الحر الشديد وحظر الظهيرة، تُبرز وَهَتنا الظروف الخارجية غير الآمنة وتدعم إرسالًا أكثر أمانًا.",
+  about_offline_title: "تعمل دون اتصال",
+  about_offline_body: "إشارة ضعيفة؟ يُحفظ بلاغك ويُزامَن لاحقًا، فلا تعيق التغطية الضعيفة أي بلاغ ريفي.",
+  about_community_title: "مبنية للمجتمع",
+  about_community_body: "متوفرة بالعربية والإنجليزية والأردية والهندية — إبلاغ يناسب من يعيشون ويعملون هنا.",
 
   report_title: "الإبلاغ عن خطر",
   report_step_category: "الفئة والتفاصيل",
@@ -596,6 +655,16 @@ const ar: Translations = {
   confirm_reference: "الرقم المرجعي",
   confirm_status: "الحالة",
   confirm_expected: "الرد المتوقع",
+  confirm_hazard_type: "نوع الخطر",
+  confirm_severity: "الخطورة",
+  confirm_analyzed_by: "تم التحليل بواسطة",
+  report_analyzing_title: "جارٍ فحص الصورة…",
+  report_analyzing_sub: "تشغيل كشف المخاطر المحلي (YOLO) على صورتك.",
+  report_detected: "تم الكشف",
+  report_detected_none: "لم يُكتشف خطر في الصورة — سيُستخدم التصنيف الذي اخترته.",
+  report_k2_title: "‏K2 Think V2 يفكّر…",
+  report_k2_sub: "تحليل الكشف ووصفك لتحديد نوع الخطر والخطورة ووقت الاستجابة.",
+  offline_ai_note: "سيتم الكشف والتحليل الذكي تلقائيًا عند عودة الاتصال بالإنترنت.",
   confirm_track: "تتبع البلاغ",
   confirm_another: "الإبلاغ عن خطر آخر",
 
@@ -792,6 +861,19 @@ const ur: Translations = {
   home_bg_auto: "خودکار",
   home_bg_day: "دن",
   home_bg_night: "رات",
+  about_section_title: "وَہَتنا کے بارے میں",
+  about_what_title: "وَہَتنا کیا ہے؟",
+  about_what_body: "القوع میں خطرات کی رپورٹنگ اور انتظام کے لیے ایک دیہی حفاظتی پلیٹ فارم۔",
+  about_alquaa_title: "القوع کیوں؟",
+  about_alquaa_body: "دیہی، پھیلا ہوا اور انتہائی گرم — کھیتوں اور اونٹ سہولیات کے ساتھ جنہیں عام شہری نظام سے سنبھالنا مشکل ہے۔",
+  about_report_title: "آپ کی رپورٹ کیوں اہم ہے",
+  about_report_body: "ایک رپورٹ سپروائزرز کو مسئلہ ڈھونڈنے، ردِعمل کی ترجیح اور چھوٹے خطرے کو ہنگامی صورت بننے سے روکنے میں مدد دیتی ہے۔",
+  about_heat_title: "گرمی سے حفاظت کا نوٹس",
+  about_heat_body: "شدید گرمی اور دوپہر کی پابندی کے دوران، وَہَتنا غیر محفوظ بیرونی حالات کی نشاندہی اور محفوظ ڈسپیچ میں مدد کرتی ہے۔",
+  about_offline_title: "آف لائن بھی کام کرتی ہے",
+  about_offline_body: "کمزور سگنل؟ آپ کی رپورٹ محفوظ ہو کر بعد میں سنک ہو جاتی ہے، کمزور کوریج کسی دیہی رپورٹ کو نہیں روکتی۔",
+  about_community_title: "کمیونٹی کے لیے بنائی گئی",
+  about_community_body: "انگریزی، عربی، اردو اور ہندی میں دستیاب — رپورٹنگ جو یہاں رہنے اور کام کرنے والوں کے مطابق ہو۔",
 
   report_title: "خطرے کی رپورٹ",
   report_step_category: "قسم اور تفصیل",
@@ -839,6 +921,16 @@ const ur: Translations = {
   confirm_reference: "حوالہ",
   confirm_status: "حیثیت",
   confirm_expected: "متوقع جواب",
+  confirm_hazard_type: "خطرے کی قسم",
+  confirm_severity: "شدت",
+  confirm_analyzed_by: "تجزیہ بذریعہ",
+  report_analyzing_title: "تصویر اسکین ہو رہی ہے…",
+  report_analyzing_sub: "آپ کی تصویر پر مقامی خطرہ شناخت (YOLO) چل رہی ہے۔",
+  report_detected: "شناخت ہوا",
+  report_detected_none: "تصویر میں کوئی خطرہ شناخت نہیں ہوا — آپ کی منتخب کردہ قسم استعمال ہوگی۔",
+  report_k2_title: "‏K2 Think V2 سوچ رہا ہے…",
+  report_k2_sub: "خطرے کی قسم، شدت اور ردِعمل کا وقت طے کرنے کے لیے شناخت اور آپ کی تفصیل کا تجزیہ۔",
+  offline_ai_note: "انٹرنیٹ واپس آنے پر شناخت اور AI تجزیہ خودکار طور پر چلے گا۔",
   confirm_track: "رپورٹ ٹریک کریں",
   confirm_another: "ایک اور خطرہ رپورٹ کریں",
 
@@ -1035,6 +1127,19 @@ const hi: Translations = {
   home_bg_auto: "स्वतः",
   home_bg_day: "दिन",
   home_bg_night: "रात",
+  about_section_title: "वहatna के बारे में",
+  about_what_title: "वहatna क्या है?",
+  about_what_body: "अल क़ुआ में खतरों की रिपोर्टिंग और प्रबंधन के लिए एक ग्रामीण सुरक्षा मंच।",
+  about_alquaa_title: "अल क़ुआ ही क्यों?",
+  about_alquaa_body: "ग्रामीण, फैला हुआ और बेहद गर्म — खेतों और ऊँट सुविधाओं के साथ, जिन्हें सामान्य शहरी प्रणाली से संभालना कठिन है।",
+  about_report_title: "आपकी रिपोर्ट क्यों मायने रखती है",
+  about_report_body: "एक रिपोर्ट सुपरवाइज़र को समस्या ढूँढने, प्रतिक्रिया को प्राथमिकता देने और छोटे खतरे को आपातकाल बनने से रोकने में मदद करती है।",
+  about_heat_title: "गर्मी सुरक्षा सूचना",
+  about_heat_body: "अत्यधिक गर्मी और दोपहर प्रतिबंध के दौरान, वहatna असुरक्षित बाहरी स्थितियों को चिह्नित करती है और सुरक्षित डिस्पैच में मदद करती है।",
+  about_offline_title: "ऑफलाइन भी काम करती है",
+  about_offline_body: "कमज़ोर सिग्नल? आपकी रिपोर्ट सहेजी जाकर बाद में सिंक हो जाती है, ताकि कमज़ोर कवरेज किसी ग्रामीण रिपोर्ट को न रोके।",
+  about_community_title: "समुदाय के लिए बनाई गई",
+  about_community_body: "अंग्रेज़ी, अरबी, उर्दू और हिंदी में उपलब्ध — यहाँ रहने और काम करने वालों के अनुकूल रिपोर्टिंग।",
 
   report_title: "खतरे की रिपोर्ट",
   report_step_category: "श्रेणी और विवरण",
@@ -1082,6 +1187,16 @@ const hi: Translations = {
   confirm_reference: "संदर्भ",
   confirm_status: "स्थिति",
   confirm_expected: "अपेक्षित प्रतिक्रिया",
+  confirm_hazard_type: "खतरे का प्रकार",
+  confirm_severity: "गंभीरता",
+  confirm_analyzed_by: "विश्लेषण द्वारा",
+  report_analyzing_title: "फ़ोटो स्कैन हो रही है…",
+  report_analyzing_sub: "आपकी फ़ोटो पर स्थानीय खतरा पहचान (YOLO) चल रही है।",
+  report_detected: "पहचाना गया",
+  report_detected_none: "फ़ोटो में कोई खतरा नहीं मिला — आपकी चुनी श्रेणी उपयोग होगी।",
+  report_k2_title: "K2 Think V2 सोच रहा है…",
+  report_k2_sub: "खतरे का प्रकार, गंभीरता और प्रतिक्रिया समय तय करने हेतु पहचान और आपके विवरण का विश्लेषण।",
+  offline_ai_note: "इंटरनेट वापस आने पर पहचान और AI विश्लेषण स्वतः चलेगा।",
   confirm_track: "रिपोर्ट ट्रैक करें",
   confirm_another: "एक और खतरे की रिपोर्ट करें",
 

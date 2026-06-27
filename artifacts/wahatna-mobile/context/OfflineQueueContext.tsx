@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { apiBase } from "@/constants/env";
 
 const QUEUE_KEY = "wahatna_offline_queue";
 
@@ -100,8 +101,7 @@ export function OfflineQueueProvider({ children }: { children: React.ReactNode }
     const pending = queueRef.current.filter(i => i.status === "pending" || i.status === "failed");
     if (!pending.length) return;
 
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    const base = domain ? `https://${domain}/api` : "http://localhost:8080/api";
+    const base = apiBase();
 
     for (const item of pending) {
       const current = queueRef.current.map(i => i.id === item.id ? { ...i, status: "syncing" as QueueItemStatus } : i);

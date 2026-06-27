@@ -15,12 +15,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "@/components/GlassCard";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { geocode, type GeoResult } from "@/constants/api";
+import { apiBase } from "@/constants/env";
 import { isHeatBanActive } from "@/constants/heat";
 import { useAuth } from "@/context/AuthContext";
 import { useTranslation } from "@/context/LanguageContext";
@@ -28,11 +30,13 @@ import { useOfflineQueue } from "@/context/OfflineQueueContext";
 import { useNetworkState } from "@/hooks/useNetworkState";
 import { useColors } from "@/hooks/useColors";
 import { RouteMap } from "@/components/RouteMap";
+import { DetectionOverlay, type Detection } from "@/components/DetectionOverlay";
+import { K2ThinkingLoader } from "@/components/K2ThinkingLoader";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
 type WizardStep = 1 | 2 | 3 | 4;
-type Phase = "wizard" | "submitting" | "confirmed";
+type Phase = "wizard" | "analyzing" | "thinking" | "confirmed";
 type LocationSource = "gps" | "address" | "pin";
 type GpsState = "idle" | "fetching" | "ok" | "denied";
 
@@ -41,7 +45,34 @@ interface SubmitResult {
   reference: string;
   due_at: string;
   score_awarded?: number;
-  assessment?: { risk_level?: string };
+  vision?: {
+    chosen_category?: string;
+    threat_label?: string;
+    severity?: number;
+    severity_label?: string;
+    confidence?: number | null;
+    detections?: Detection[];
+  };
+  assessment?: {
+    risk_level?: string;
+    eta_text?: string | null;
+    analysis_source?: string;
+    recommended_protocol?: string;
+  };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Append a local/remote image uri to a FormData as the "image" file part. */
+async function appendImage(fd: FormData, uri: string) {
+  const ext = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
+  const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(uri)).blob();
+    fd.append("image", blob, `hazard.${safeExt}`);
+  } else {
+    fd.append("image", { uri, name: `hazard.${safeExt}`, type: `image/${safeExt}` } as unknown as Blob);
+  }
 }
 
 // ─── categories ──────────────────────────────────────────────────────────────
@@ -90,6 +121,8 @@ export default function ReportScreen() {
   const { addToQueue } = useOfflineQueue();
   const { isOnline } = useNetworkState();
 
+  const { width: windowWidth } = useWindowDimensions();
+
   const row: "row" | "row-reverse" = isRTL ? "row-reverse" : "row";
   const textAlign: "left" | "right" = isRTL ? "right" : "left";
 
@@ -119,6 +152,11 @@ export default function ReportScreen() {
   const [phase, setPhase] = useState<Phase>("wizard");
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const [error, setError] = useState("");
+
+  // ── AI pipeline (YOLO detection → K2 Think) visual state ──
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [analyzedUri, setAnalyzedUri] = useState<string | null>(null);
+  const [analyzeDone, setAnalyzeDone] = useState(false);
 
   const paddingBottom = insets.bottom + 100;
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0) + 8;
@@ -272,44 +310,85 @@ export default function ReportScreen() {
       return;
     }
 
-    setPhase("submitting");
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    const base = domain ? `https://${domain}/api` : "http://localhost:8080/api";
+    const base = apiBase();
+    const photo = photos[0];
+
+    const fields: Record<string, string> = {
+      lat: String(lat),
+      lon: String(lon),
+      report_text: description.trim(),
+      category,
+      phone_primary: phonePrimary.trim(),
+      location_source: locationSource,
+    };
+    if (phoneSecondary.trim()) fields.phone_secondary = phoneSecondary.trim();
+    if (addrDetails) fields.address_details = addrDetails;
 
     try {
-      const formData = new FormData();
-      formData.append("lat", String(lat));
-      formData.append("lon", String(lon));
-      formData.append("report_text", description.trim());
-      formData.append("category", category);
-      formData.append("phone_primary", phonePrimary.trim());
-      if (phoneSecondary.trim()) formData.append("phone_secondary", phoneSecondary.trim());
-      if (addrDetails) formData.append("address_details", addrDetails);
-      formData.append("location_source", locationSource);
+      let imageFilename: string | undefined;
+      let dets: Detection[] = [];
+      let analyzeOk = false;
 
-      if (photos[0]) {
-        const uri = photos[0];
-        const ext = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
-        const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
-        if (Platform.OS === "web") {
-          try {
-            const blob = await (await fetch(uri)).blob();
-            formData.append("image", blob, `hazard.${safeExt}`);
-          } catch {}
-        } else {
-          formData.append("image", { uri, name: `hazard.${safeExt}`, type: `image/${safeExt}` } as unknown as Blob);
+      // ── Stage 1: YOLO detection (only if there's a photo) ──
+      if (photo) {
+        setDetections([]);
+        setAnalyzeDone(false);
+        setAnalyzedUri(photo);
+        setPhase("analyzing");
+        try {
+          const fd = new FormData();
+          await appendImage(fd, photo);
+          const aRes = await expoFetch(`${base}/report/analyze`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (aRes.ok) {
+            const aData = (await aRes.json()) as { image_filename: string; detections?: Detection[] };
+            imageFilename = aData.image_filename;
+            dets = aData.detections ?? [];
+            setDetections(dets);
+            setAnalyzeDone(true);
+            analyzeOk = true;
+            await sleep(dets.length ? 1500 : 950); // let the user see the boxes / "no detection"
+          }
+        } catch {
+          /* detection service unavailable — fall through; image still sent below */
         }
       }
 
-      const res = await expoFetch(`${base}/report`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
+      // ── Stage 2: K2 Think V2 triage ──
+      setPhase("thinking");
+      let res;
+      if (analyzeOk && imageFilename) {
+        res = await expoFetch(`${base}/report`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...fields, image_filename: imageFilename, detections: dets }),
+        });
+      } else if (photo) {
+        // Detection failed — send the photo directly so it isn't lost; the
+        // server runs YOLO itself if it can.
+        const fd = new FormData();
+        Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+        await appendImage(fd, photo);
+        res = await expoFetch(`${base}/report`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+      } else {
+        res = await expoFetch(`${base}/report`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...fields, detections: [] }),
+        });
+      }
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as SubmitResult;
+      const data = (await res.json()) as SubmitResult;
       setSubmitResult(data);
+      if (data.vision?.detections?.length) setDetections(data.vision.detections);
       setPhase("confirmed");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: unknown) {
@@ -337,6 +416,9 @@ export default function ReportScreen() {
     setPhotos([]);
     setSubmitResult(null);
     setError("");
+    setDetections([]);
+    setAnalyzedUri(null);
+    setAnalyzeDone(false);
   }
 
   // ── confirmed screen ──────────────────────────────────────
@@ -345,6 +427,21 @@ export default function ReportScreen() {
     const ref = submitResult?.reference ?? null;
     const dueAt = submitResult?.due_at ?? null;
     const riskLevel = submitResult?.assessment?.risk_level ?? "medium";
+    const vision = submitResult?.vision;
+    const hazardLabel = vision?.threat_label ?? vision?.chosen_category ?? null;
+    const severityLabel = vision?.severity_label ?? null;
+    const etaText = submitResult?.assessment?.eta_text ?? null;
+    const analysisSource = submitResult?.assessment?.analysis_source ?? null;
+    const sourceLabel =
+      analysisSource === "yolo+k2"
+        ? "YOLO + K2 Think V2"
+        : analysisSource === "user+k2"
+          ? "K2 Think V2"
+          : analysisSource?.startsWith("yolo")
+            ? "YOLO + local triage"
+            : analysisSource
+              ? "Local triage"
+              : null;
 
     return (
       <ScrollView
@@ -377,6 +474,12 @@ export default function ReportScreen() {
           </Text>
         )}
 
+        {isOfflineQueue && (
+          <Text style={[styles.confirmBody, { color: colors.mutedForeground, textAlign: "center" }]}>
+            {t("offline_ai_note")}
+          </Text>
+        )}
+
         {ref && (
           <GlassCard style={{ width: "100%" }} padding={20}>
             <View style={[styles.confirmRow, { flexDirection: row }]}>
@@ -393,18 +496,44 @@ export default function ReportScreen() {
                 <Text style={styles.pendingPillText}>{t("status_pending_review").toUpperCase()}</Text>
               </View>
             </View>
+            {hazardLabel && (
+              <View style={[styles.confirmRow, { flexDirection: row, marginTop: 12 }]}>
+                <Text style={[styles.confirmLabel, { color: colors.mutedForeground }]}>
+                  {t("confirm_hazard_type")}
+                </Text>
+                <Text style={[styles.confirmValue, { color: colors.text }]}>{hazardLabel}</Text>
+              </View>
+            )}
+            {severityLabel && (
+              <View style={[styles.confirmRow, { flexDirection: row, marginTop: 12 }]}>
+                <Text style={[styles.confirmLabel, { color: colors.mutedForeground }]}>
+                  {t("confirm_severity")}
+                </Text>
+                <SeverityBadge level={severityLabel} size="sm" />
+              </View>
+            )}
             {dueAt && (
               <View style={[styles.confirmRow, { flexDirection: row, marginTop: 12 }]}>
                 <Text style={[styles.confirmLabel, { color: colors.mutedForeground }]}>
                   {t("confirm_expected")}
                 </Text>
                 <Text style={[styles.confirmValue, { color: colors.text }]}>
-                  {new Date(dueAt).toLocaleString(isRTL ? "ar-AE" : "en-AE", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {etaText
+                    ? etaText
+                    : new Date(dueAt).toLocaleString(isRTL ? "ar-AE" : "en-AE", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                </Text>
+              </View>
+            )}
+            {sourceLabel && (
+              <View style={[styles.confirmAnalyzed, { flexDirection: row }]}>
+                <Feather name="cpu" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.confirmAnalyzedText, { color: colors.mutedForeground }]}>
+                  {t("confirm_analyzed_by")} {sourceLabel}
                 </Text>
               </View>
             )}
@@ -432,15 +561,77 @@ export default function ReportScreen() {
     );
   }
 
-  // ── submitting spinner ────────────────────────────────────
-  if (phase === "submitting") {
+  // ── AI pipeline: YOLO detection → K2 Think thinking ───────
+  if (phase === "analyzing" || phase === "thinking") {
+    const overlayW = Math.min(windowWidth - 32, 460);
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.submittingText, { color: colors.mutedForeground }]}>
-          {t("report_submitting")}
-        </Text>
-      </View>
+      <ScrollView
+        style={[styles.root, { backgroundColor: colors.background }]}
+        contentContainerStyle={[
+          styles.analyzeContainer,
+          { paddingTop: paddingTop + 20, paddingBottom },
+        ]}
+      >
+        {analyzedUri && (
+          <View style={{ opacity: phase === "thinking" ? 0.5 : 1 }}>
+            <DetectionOverlay
+              uri={analyzedUri}
+              detections={detections}
+              width={overlayW}
+              scanning={phase === "analyzing" && !analyzeDone}
+            />
+          </View>
+        )}
+
+        {phase === "analyzing" && (
+          <View style={styles.analyzeStatus}>
+            {!analyzeDone ? (
+              <>
+                <View style={[styles.scanBadge, { flexDirection: row }]}>
+                  <ActivityIndicator size="small" color="#0891B2" />
+                  <Text style={styles.scanBadgeText}>{t("report_analyzing_title")}</Text>
+                </View>
+                <Text style={[styles.analyzeSub, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  {t("report_analyzing_sub")}
+                </Text>
+              </>
+            ) : (
+              <View
+                style={[
+                  styles.detectResult,
+                  {
+                    flexDirection: row,
+                    backgroundColor: detections.length ? "#ECFEFF" : "#FFF7ED",
+                    borderColor: detections.length ? "#22D3EE" : "#FDBA74",
+                  },
+                ]}
+              >
+                <Feather
+                  name={detections.length ? "check-circle" : "info"}
+                  size={16}
+                  color={detections.length ? "#0891B2" : "#EA580C"}
+                />
+                <Text
+                  style={[
+                    styles.detectResultText,
+                    { color: detections.length ? "#0E7490" : "#9A3412", textAlign },
+                  ]}
+                >
+                  {detections.length
+                    ? `${t("report_detected")}: ${detections.map((d) => d.label).join(", ")}`
+                    : t("report_detected_none")}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {phase === "thinking" && (
+          <View style={{ marginTop: 22, width: "100%" }}>
+            <K2ThinkingLoader label={t("report_k2_title")} sublabel={t("report_k2_sub")} />
+          </View>
+        )}
+      </ScrollView>
     );
   }
 
@@ -978,6 +1169,30 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   submittingText: { fontSize: 15 },
+  analyzeContainer: { paddingHorizontal: 16, alignItems: "center", gap: 16 },
+  analyzeStatus: { alignItems: "center", gap: 10, width: "100%" },
+  scanBadge: {
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#ECFEFF",
+    borderColor: "#A5F3FC",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  scanBadgeText: { fontSize: 13, fontWeight: "800" as const, color: "#0E7490", letterSpacing: 0.3 },
+  analyzeSub: { fontSize: 12.5, lineHeight: 18, paddingHorizontal: 12 },
+  detectResult: {
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    width: "100%",
+  },
+  detectResultText: { flex: 1, fontSize: 13, fontWeight: "700" as const, lineHeight: 18 },
   progressHeader: {
     paddingHorizontal: 20,
     paddingBottom: 12,
@@ -1171,6 +1386,8 @@ const styles = StyleSheet.create({
   confirmRow: { justifyContent: "space-between", alignItems: "center" },
   confirmLabel: { fontSize: 12, fontWeight: "600" as const },
   confirmValue: { fontSize: 14, fontWeight: "700" as const },
+  confirmAnalyzed: { alignItems: "center", gap: 6, marginTop: 14 },
+  confirmAnalyzedText: { fontSize: 11.5, fontWeight: "600" as const },
   pendingPill: { backgroundColor: "#F3F4F6", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#D1D5DB" },
   pendingPillText: { fontSize: 10, fontWeight: "700" as const, color: "#6B7280", letterSpacing: 0.5 },
   trackBtn: {

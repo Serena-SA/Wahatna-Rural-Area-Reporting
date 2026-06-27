@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RouteMap } from "@/components/RouteMap";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { apiFetch, apiGet } from "@/constants/api";
+import { apiOrigin } from "@/constants/env";
 import type { MapPoint } from "@/constants/mapHtml";
 import { useAuth } from "@/context/AuthContext";
 import { useTranslation } from "@/context/LanguageContext";
@@ -82,9 +83,7 @@ type StatusFilter =
 
 function getImageUrl(imageUrl: string | null): string | null {
   if (!imageUrl) return null;
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}` : "http://localhost:8080";
-  return `${base}${imageUrl}`;
+  return `${apiOrigin()}${imageUrl}`;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {

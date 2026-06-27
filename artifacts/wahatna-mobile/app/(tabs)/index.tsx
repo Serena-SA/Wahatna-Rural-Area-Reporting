@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AwarenessCards } from "@/components/AwarenessCards";
 import { DesertBackground, type DesertMode } from "@/components/DesertBackground";
 import { GlassCard } from "@/components/GlassCard";
 import { HeatBanner } from "@/components/HeatBanner";
@@ -346,6 +347,9 @@ export default function HomeScreen() {
             ))}
           </View>
         </GlassCard>
+
+        {/* ── Awareness / About section ─────────────────────── */}
+        <AwarenessCards />
       </ScrollView>
     </View>
   );
