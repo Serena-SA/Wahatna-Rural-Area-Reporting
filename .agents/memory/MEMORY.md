@@ -1,0 +1,3 @@
+- [Phase progress](phase-progress.md) — Phases 1+2 merged; Phases 3–6 pending; push to GitHub after each phase.
+- [Auth & roles](auth-roles.md) — register always creates role="user"; supervisor/admin set in DB only.
+- [i18n architecture](i18n-arch.md) — EN/AR/UR/HI in constants/i18n.ts; LanguageContext persists to AsyncStorage "wahatna_lang"; isRTL per language.

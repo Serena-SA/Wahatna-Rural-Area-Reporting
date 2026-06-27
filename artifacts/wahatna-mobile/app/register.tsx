@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -12,155 +11,201 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useColorScheme,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-
-const ROLES = [
-  { key: "worker", label: "Field Worker" },
-  { key: "supervisor", label: "Supervisor" },
-];
+import { useTranslation } from "@/context/LanguageContext";
 
 export default function RegisterScreen() {
   const colors = useColors();
-  const scheme = useColorScheme();
-  const gradient: [string, string, string] =
-    scheme === "light"
-      ? ["#FBF5E6", "#F4EAD3", "#EADCBE"]
-      : ["#14100A", "#1C1610", "#2E2215"];
   const insets = useSafeAreaInsets();
   const { register } = useAuth();
+  const { t, isRTL } = useTranslation();
+
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("worker");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleRegister = async () => {
     if (!username.trim() || !email.trim() || !password.trim()) {
-      setError("All fields are required");
+      setError(t("auth_all_fields_required"));
       return;
     }
     setError("");
     setLoading(true);
     try {
-      await register(username.trim(), email.trim(), password.trim(), role);
+      // Role is always "user" — backend enforces this regardless
+      await register(username.trim(), email.trim(), password.trim());
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (e: unknown) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError((e as Error).message || "Registration failed");
+      setError((e as Error).message || t("auth_registration_failed"));
     } finally {
       setLoading(false);
     }
   };
 
+  const fields: Array<{
+    key: string;
+    label: string;
+    value: string;
+    setter: (v: string) => void;
+    icon: "user" | "mail" | "lock" | "type";
+    secure?: boolean;
+  }> = [
+    { key: "username", label: t("auth_username"), value: username, setter: setUsername, icon: "user" },
+    { key: "email",    label: t("auth_email"),    value: email,    setter: setEmail,    icon: "mail" },
+    { key: "password", label: t("auth_password"), value: password, setter: setPassword, icon: "lock", secure: true },
+    { key: "fullName", label: t("auth_full_name_optional"), value: fullName, setter: setFullName, icon: "type" },
+  ];
+
   return (
-    <LinearGradient colors={gradient} style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+        style={styles.kav}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color={colors.text} />
+          {/* Back */}
+          <Pressable
+            onPress={() => router.back()}
+            style={[styles.backBtn, { flexDirection: isRTL ? "row-reverse" : "row" }]}
+          >
+            <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={22} color={colors.text} />
           </Pressable>
 
-          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
-          <Text style={[styles.sub, { color: colors.mutedForeground }]}>Join the Wahatna field network</Text>
+          {/* Title */}
+          <Text style={[styles.title, { color: colors.text, textAlign: isRTL ? "right" : "left" }]}>
+            {t("auth_create_account")}
+          </Text>
+          <Text style={[styles.sub, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
+            {t("auth_join_subtitle")}
+          </Text>
 
-          <View style={styles.form}>
-            {[
-              { label: "Username", value: username, setter: setUsername, icon: "user" as const, autoCapitalize: "none" as const },
-              { label: "Email", value: email, setter: setEmail, icon: "mail" as const, autoCapitalize: "none" as const },
-              { label: "Password", value: password, setter: setPassword, icon: "lock" as const, secureTextEntry: true, autoCapitalize: "none" as const },
-            ].map(field => (
-              <View key={field.label} style={[styles.inputWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                <Feather name={field.icon} size={18} color={colors.mutedForeground} style={styles.icon} />
+          {/* Form card */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            {fields.map(field => (
+              <View
+                key={field.key}
+                style={[
+                  styles.inputWrap,
+                  {
+                    backgroundColor: colors.surface2,
+                    borderColor: colors.border,
+                    flexDirection: isRTL ? "row-reverse" : "row",
+                  },
+                ]}
+              >
+                <Feather
+                  name={field.icon}
+                  size={18}
+                  color={colors.mutedForeground}
+                  style={isRTL ? styles.iconRTL : styles.iconLTR}
+                />
                 <TextInput
-                  style={[styles.input, { color: colors.text }]}
+                  style={[styles.input, { color: colors.text, textAlign: isRTL ? "right" : "left" }]}
                   placeholder={field.label}
                   placeholderTextColor={colors.mutedForeground}
                   value={field.value}
                   onChangeText={field.setter}
-                  secureTextEntry={field.secureTextEntry}
-                  autoCapitalize={field.autoCapitalize ?? "none"}
+                  secureTextEntry={field.secure}
+                  autoCapitalize="none"
                   autoCorrect={false}
                 />
               </View>
             ))}
 
-            <Text style={[styles.roleLabel, { color: colors.mutedForeground }]}>ROLE</Text>
-            <View style={styles.roleRow}>
-              {ROLES.map(r => (
-                <Pressable
-                  key={r.key}
-                  onPress={() => setRole(r.key)}
-                  style={[
-                    styles.roleBtn,
-                    {
-                      backgroundColor: role === r.key ? colors.primary : colors.surface2,
-                      borderColor: role === r.key ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: role === r.key ? colors.primaryForeground : colors.mutedForeground, fontWeight: "600" as const }}>
-                    {r.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
             {!!error && (
-              <View style={styles.errorRow}>
+              <View style={[styles.errorRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
                 <Feather name="alert-circle" size={13} color={colors.danger} />
                 <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
               </View>
             )}
 
             <Pressable
-              style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+              ]}
               onPress={handleRegister}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color={colors.primaryForeground} />
               ) : (
-                <Text style={[styles.submitText, { color: colors.primaryForeground }]}>CREATE ACCOUNT</Text>
+                <Text style={[styles.submitText, { color: colors.primaryForeground }]}>
+                  {t("auth_create_account").toUpperCase()}
+                </Text>
               )}
             </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 28, gap: 8 },
-  backBtn: { marginBottom: 24, width: 40 },
+  kav: { flex: 1 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 24, gap: 12 },
+  backBtn: { marginBottom: 8, width: 44, height: 44, alignItems: "flex-start", justifyContent: "center" },
   title: { fontSize: 26, fontWeight: "800" as const, letterSpacing: -0.3 },
-  sub: { fontSize: 13, marginBottom: 24, lineHeight: 19 },
-  form: { gap: 14 },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 18, borderWidth: 1, paddingHorizontal: 16, height: 54 },
-  icon: { marginRight: 10 },
-  input: { flex: 1, fontSize: 15, height: 54 },
-  roleLabel: { fontSize: 11, fontWeight: "700" as const, letterSpacing: 1, marginTop: 4 },
-  roleRow: { flexDirection: "row", gap: 10 },
-  roleBtn: { flex: 1, height: 46, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  sub: { fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    gap: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  inputWrap: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  iconLTR: { marginRight: 10 },
+  iconRTL: { marginLeft: 10 },
+  input: { flex: 1, fontSize: 15, height: 52 },
+  errorRow: { alignItems: "center", gap: 6 },
   errorText: { fontSize: 13 },
   submitBtn: {
-    height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", marginTop: 8,
-    shadowColor: "rgba(109,179,63,0.5)", shadowOpacity: 1, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+    height: 52,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    shadowColor: "#2D7A3A",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
-  submitText: { fontSize: 15, fontWeight: "700" as const, letterSpacing: 2 },
+  submitText: { fontSize: 15, fontWeight: "700" as const, letterSpacing: 1.5 },
 });

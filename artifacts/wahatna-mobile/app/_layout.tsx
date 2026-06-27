@@ -17,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import { LocationProvider } from "@/context/LocationContext";
 import { OfflineQueueProvider, useOfflineQueue } from "@/context/OfflineQueueContext";
 import { useNetworkState } from "@/hooks/useNetworkState";
@@ -63,7 +64,7 @@ function NotificationHandler() {
     const receivedSub = Notifications.addNotificationReceivedListener(() => {});
 
     const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
-      router.push("/(tabs)/dashboard");
+      router.push("/(tabs)/supervisor");
     });
 
     return () => {
@@ -92,7 +93,7 @@ function RootLayoutNav() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="register" options={{ title: "Create Account" }} />
+        <Stack.Screen name="register" options={{ headerShown: false }} />
       </Stack>
     </>
   );
@@ -118,17 +119,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <LocationProvider>
-              <OfflineQueueProvider>
-                <GestureHandlerRootView>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </OfflineQueueProvider>
-            </LocationProvider>
-          </AuthProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <LocationProvider>
+                <OfflineQueueProvider>
+                  <GestureHandlerRootView>
+                    <KeyboardProvider>
+                      <RootLayoutNav />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </OfflineQueueProvider>
+              </LocationProvider>
+            </AuthProvider>
+          </LanguageProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
