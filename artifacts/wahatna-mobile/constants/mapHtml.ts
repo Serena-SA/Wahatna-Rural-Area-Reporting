@@ -1,8 +1,10 @@
 export interface MapPoint {
+  id?: number;
   lat: number;
   lon: number;
   label: string;
   kind: "start" | "destination" | "stop";
+  color?: string;
 }
 
 // Escape so embedded JSON can never break out of the inline <script> context
@@ -140,12 +142,22 @@ export function buildMapHtml(
 
   var bounds = [];
   points.forEach(function (p) {
-    var c = colorFor(p.kind);
-    L.circleMarker([p.lat, p.lon], {
+    var c = p.color || colorFor(p.kind);
+    var mk = L.circleMarker([p.lat, p.lon], {
       radius: 9, color: '${theme.markerStroke}', weight: 2, fillColor: c, fillOpacity: 1
     }).addTo(map).bindTooltip(p.label, {
       permanent: true, direction: 'top', className: 'lbl', offset: [0, -8]
     });
+    if (p.id != null) {
+      mk.on('click', function () {
+        var _msg = JSON.stringify({ type: 'markerPress', id: p.id });
+        if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(_msg);
+        } else {
+          try { window.parent.postMessage(_msg, '*'); } catch(_e) {}
+        }
+      });
+    }
     bounds.push([p.lat, p.lon]);
   });
 

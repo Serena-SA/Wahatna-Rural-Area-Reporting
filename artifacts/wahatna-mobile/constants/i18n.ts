@@ -154,6 +154,12 @@ export interface Translations {
   sup_filters: string;
   sup_phone: string;
   sup_description: string;
+  sev_low: string;
+  sev_medium: string;
+  sev_high: string;
+  sev_critical: string;
+  time_h: string;
+  time_m: string;
 
   // ── Fleet ──────────────────────────────────────────────────────
   fleet_title: string;
@@ -341,6 +347,12 @@ const en: Translations = {
   sup_filters: "Filters",
   sup_phone: "Phone",
   sup_description: "Description",
+  sev_low: "Low",
+  sev_medium: "Medium",
+  sev_high: "High",
+  sev_critical: "Critical",
+  time_h: "h",
+  time_m: "m",
 
   fleet_title: "Fleet & Routes",
   fleet_start_location: "Start Location",
@@ -524,6 +536,12 @@ const ar: Translations = {
   sup_filters: "الفلاتر",
   sup_phone: "الهاتف",
   sup_description: "الوصف",
+  sev_low: "منخفض",
+  sev_medium: "متوسط",
+  sev_high: "مرتفع",
+  sev_critical: "حرج",
+  time_h: "س",
+  time_m: "د",
 
   fleet_title: "الأسطول والمسارات",
   fleet_start_location: "نقطة الانطلاق",
@@ -707,6 +725,12 @@ const ur: Translations = {
   sup_filters: "فلٹرز",
   sup_phone: "فون",
   sup_description: "تفصیل",
+  sev_low: "کم",
+  sev_medium: "درمیانہ",
+  sev_high: "زیادہ",
+  sev_critical: "نازک",
+  time_h: "گ",
+  time_m: "م",
 
   fleet_title: "فلیٹ اور راستے",
   fleet_start_location: "آغاز کا مقام",
@@ -890,6 +914,12 @@ const hi: Translations = {
   sup_filters: "फ़िल्टर",
   sup_phone: "फ़ोन",
   sup_description: "विवरण",
+  sev_low: "निम्न",
+  sev_medium: "मध्यम",
+  sev_high: "उच्च",
+  sev_critical: "गंभीर",
+  time_h: "घ",
+  time_m: "म",
 
   fleet_title: "फ्लीट और मार्ग",
   fleet_start_location: "प्रारंभ स्थान",

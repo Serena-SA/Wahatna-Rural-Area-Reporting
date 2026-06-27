@@ -120,6 +120,8 @@ function slaInfo(
   dueAt: string | null,
   dueInLabel: string,
   overdueLabel: string,
+  timeH: string,
+  timeM: string,
 ): { label: string; color: string; urgency: "ok" | "amber" | "red" } {
   if (!dueAt) return { label: "", color: "#6B7280", urgency: "ok" };
   const diff = new Date(dueAt).getTime() - Date.now();
@@ -127,13 +129,13 @@ function slaInfo(
     const over = Math.abs(diff);
     const h = Math.floor(over / 3600000);
     const m = Math.floor((over % 3600000) / 60000);
-    return { label: `${overdueLabel} — ${h}h ${m}m`, color: "#DC2626", urgency: "red" };
+    return { label: `${overdueLabel} — ${h}${timeH} ${m}${timeM}`, color: "#DC2626", urgency: "red" };
   }
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   const urgency = diff < 18 * 3600000 ? "amber" : "ok";
   return {
-    label: `${dueInLabel} ${h}h ${m}m`,
+    label: `${dueInLabel} ${h}${timeH} ${m}${timeM}`,
     color: urgency === "amber" ? "#D97706" : "#16A34A",
     urgency,
   };
@@ -249,10 +251,10 @@ function FilterBar({
 
   const sevOpts: { key: SevFilter; label: string }[] = [
     { key: "all", label: t("sup_all") },
-    { key: "critical", label: "Critical" },
-    { key: "high", label: "High" },
-    { key: "medium", label: "Medium" },
-    { key: "low", label: "Low" },
+    { key: "critical", label: t("sev_critical") },
+    { key: "high", label: t("sev_high") },
+    { key: "medium", label: t("sev_medium") },
+    { key: "low", label: t("sev_low") },
   ];
 
   const dateOpts: { key: DateFilter; label: string }[] = [
@@ -383,7 +385,7 @@ function ReportCard({
     setNotesText(report.supervisor_notes ?? "");
   }, [report.status, report.rejection_reason, report.supervisor_notes]);
 
-  const sla = slaInfo(report.due_at, t("sup_due_in"), t("sup_overdue"));
+  const sla = slaInfo(report.due_at, t("sup_due_in"), t("sup_overdue"), t("time_h"), t("time_m"));
   const imgUrl = getImageUrl(report.image_url);
 
   async function handleStatusUpdate() {
@@ -405,7 +407,7 @@ function ReportCard({
       onUpdated(updated);
       setStatusNote("");
     } catch (e: unknown) {
-      Alert.alert("Error", e instanceof Error ? e.message : String(e));
+      Alert.alert(t("err_generic"), e instanceof Error ? e.message : String(e));
     } finally {
       setUpdatingStatus(false);
     }
@@ -423,7 +425,7 @@ function ReportCard({
       const updated = (await res.json()) as Report;
       onUpdated(updated);
     } catch (e: unknown) {
-      Alert.alert("Error", e instanceof Error ? e.message : String(e));
+      Alert.alert(t("err_generic"), e instanceof Error ? e.message : String(e));
     } finally {
       setSavingNotes(false);
     }
@@ -746,9 +748,13 @@ export default function SupervisorScreen() {
       color: r.escalation_required ? "#DC2626" : r.status === "late" ? "#EA580C" : "#2563EB",
     }));
 
-  const filteredReports = reports.filter(
-    (r) => passesSevFilter(r, sevFilter) && passesDateFilter(r, dateFilter),
-  );
+  const filteredReports = reports.filter((r) => {
+    if (!passesSevFilter(r, sevFilter)) return false;
+    if (!passesDateFilter(r, dateFilter)) return false;
+    // "Critical" stats chip filters client-side by severity >= 7
+    if (statsChip === "critical" && (r.severity ?? 0) < 7) return false;
+    return true;
+  });
 
   const counts = dashboard?.counts ?? {};
   const statChips: { key: string; label: string; count: number }[] = [
@@ -834,6 +840,7 @@ export default function SupervisorScreen() {
             points={mapPoints}
             height={220}
             initialCenter={mapPoints[0] ? { lat: mapPoints[0].lat, lon: mapPoints[0].lon, zoom: 9 } : undefined}
+            onMarkerPress={(id) => setExpandedId((prev) => (prev === id ? null : id))}
           />
         </View>
       )}

@@ -11,6 +11,7 @@ interface RouteMapProps {
   pinMarker?: { lat: number; lon: number };
   initialCenter?: { lat: number; lon: number; zoom?: number };
   onPinDrop?: (lat: number, lon: number) => void;
+  onMarkerPress?: (id: number) => void;
 }
 
 export function RouteMap({
@@ -21,6 +22,7 @@ export function RouteMap({
   pinMarker,
   initialCenter,
   onPinDrop,
+  onMarkerPress,
 }: RouteMapProps) {
   const colors = useColors();
   const scheme = useColorScheme();
@@ -33,16 +35,17 @@ export function RouteMap({
   );
 
   useEffect(() => {
-    if (!pinDropEnabled || !onPinDrop) return;
+    if (!onPinDrop && !onMarkerPress) return;
     const handler = (event: MessageEvent) => {
       try {
-        const data = JSON.parse(String(event.data)) as { type: string; lat: number; lon: number };
-        if (data.type === "pinDrop") onPinDrop(data.lat, data.lon);
+        const data = JSON.parse(String(event.data)) as { type: string; lat: number; lon: number; id?: number };
+        if (data.type === "pinDrop" && onPinDrop) onPinDrop(data.lat, data.lon);
+        if (data.type === "markerPress" && onMarkerPress && data.id != null) onMarkerPress(data.id);
       } catch {}
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [pinDropEnabled, onPinDrop]);
+  }, [pinDropEnabled, onPinDrop, onMarkerPress]);
 
   return (
     <View style={[styles.wrap, { height, borderColor: colors.border }]}>
