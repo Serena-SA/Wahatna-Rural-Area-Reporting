@@ -18,12 +18,16 @@ export function OfflineBanner({ isOnline, pendingCount = 0 }: OfflineBannerProps
     }).start();
   }, [isOnline, translateY]);
 
+  const label = pendingCount > 0
+    ? `Offline · ${pendingCount} report${pendingCount > 1 ? "s" : ""} queued`
+    : "Offline";
+
   return (
     <Animated.View style={[styles.banner, { transform: [{ translateY }] }]}>
-      <Feather name="wifi-off" size={14} color="#fff" />
-      <Text style={styles.text}>
-        Offline{pendingCount > 0 ? ` · ${pendingCount} report${pendingCount > 1 ? "s" : ""} queued` : ""}
-      </Text>
+      <View style={styles.inner}>
+        <Feather name="wifi-off" size={14} color="#92400E" />
+        <Text style={styles.text}>{label}</Text>
+      </View>
     </Animated.View>
   );
 }
@@ -35,7 +39,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 999,
-    backgroundColor: "#C65A3A",
+    backgroundColor: "#FEF3C7",
+    borderBottomWidth: 1,
+    borderBottomColor: "#FDE68A",
+  },
+  inner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -43,7 +51,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   text: {
-    color: "#fff",
+    color: "#92400E",
     fontSize: 13,
     fontWeight: "600" as const,
   },

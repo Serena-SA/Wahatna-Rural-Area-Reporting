@@ -1,14 +1,28 @@
+import path from "node:path";
 import { Router, type IRouter, type Response, type NextFunction } from "express";
 import multer from "multer";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, usersTable, incidentsTable, reportsTable } from "@workspace/db";
 import { requireAuth, type AuthedRequest } from "../lib/auth";
 import { analyzeCategory, SEVERITY_TO_LABEL } from "../lib/vision";
-import { assessIncident } from "../lib/agent";
+import { assessIncident, calculateDueAt } from "../lib/agent";
+import { reportDict } from "../lib/serialize";
 
 const router: IRouter = Router();
+
+const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+
+const diskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, unique);
+  },
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: diskStorage,
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
@@ -22,7 +36,10 @@ const upload = multer({
 function uploadImage(req: AuthedRequest, res: Response, next: NextFunction) {
   upload.single("image")(req, res, (err: unknown) => {
     if (err instanceof multer.MulterError) {
-      res.status(400).json({ detail: err.code === "LIMIT_FILE_SIZE" ? "Image exceeds 10MB limit" : "Invalid upload" });
+      res.status(400).json({
+        detail:
+          err.code === "LIMIT_FILE_SIZE" ? "Image exceeds 10MB limit" : "Invalid upload",
+      });
       return;
     }
     if (err) {
@@ -47,16 +64,27 @@ router.post(
       res.status(400).json({ detail: "Valid lat and lon are required" });
       return;
     }
+
     const reportText: string = body.report_text ?? "";
     const category: string | undefined = body.category;
+    const locationSource: string | undefined = body.location_source;
+    const addressDetails: string | undefined = body.address_details;
+    const phonePrimary: string | undefined = body.phone_primary;
+    const phoneSecondary: string | undefined = body.phone_secondary;
     const imageFile = req.file;
-    const imageFilename = imageFile?.originalname ?? null;
+    const imageFilename = imageFile?.filename ?? null;
 
-    // STUB: classify from the worker-selected category (no CV model).
     const vision = analyzeCategory(category, !!imageFile);
-
-    // Local rule-based RAG assessment.
     const assessment = assessIncident(vision, lat, lon, reportText);
+    const dueAt = calculateDueAt(vision.severity);
+
+    const initialHistory = JSON.stringify([
+      {
+        status: "pending_review",
+        timestamp: new Date().toISOString(),
+        note: "Report submitted by community reporter",
+      },
+    ]);
 
     const insertedIncident = await db
       .insert(incidentsTable)
@@ -78,13 +106,20 @@ router.post(
         regulatoryReference: assessment.regulatory_reference,
         dialectNote: assessment.dialect_note,
         reportText,
-        status: "active",
+        imageFilename,
+        status: "pending_review",
+        dueAt,
+        locationSource: locationSource ?? null,
+        addressDetails: addressDetails ?? null,
+        phonePrimary: phonePrimary ?? null,
+        phoneSecondary: phoneSecondary ?? null,
+        statusHistory: initialHistory,
       })
       .returning();
     const incident = insertedIncident[0]!;
 
     const scoreDelta = vision.severity * 50;
-    const insertedReport = await db
+    await db
       .insert(reportsTable)
       .values({
         userId: user.id,
@@ -96,7 +131,6 @@ router.post(
         scoreAwarded: scoreDelta,
       })
       .returning();
-    const reportRecord = insertedReport[0]!;
 
     const newScore = (user.hazardScore ?? 0) + scoreDelta;
     await db
@@ -110,7 +144,8 @@ router.post(
 
     res.status(201).json({
       incident_id: incident.id,
-      report_id: reportRecord.id,
+      reference: `WAH-${String(incident.id).padStart(5, "0")}`,
+      due_at: dueAt.toISOString(),
       vision,
       assessment: {
         risk_level: assessment.risk_level,
@@ -123,11 +158,51 @@ router.post(
       },
       score_awarded: scoreDelta,
       worker_total_score: newScore,
-      created_at: incident.createdAt
-        ? incident.createdAt.toISOString()
-        : new Date().toISOString(),
+      created_at: incident.createdAt ? incident.createdAt.toISOString() : new Date().toISOString(),
     });
   },
 );
+
+/** GET /api/reports/my — returns the authenticated user's own reports */
+router.get("/reports/my", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const user = req.user!;
+  const rows = await db
+    .select()
+    .from(incidentsTable)
+    .where(eq(incidentsTable.userId, user.id))
+    .orderBy(desc(incidentsTable.createdAt))
+    .limit(50);
+
+  res.json({ reports: rows.map(reportDict) });
+});
+
+/** GET /api/reports/:id — returns a single report if it belongs to the user (or supervisor) */
+router.get("/reports/:id", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const user = req.user!;
+  const incidentId = Number(req.params["id"]);
+  if (Number.isNaN(incidentId)) {
+    res.status(400).json({ detail: "Invalid report id" });
+    return;
+  }
+
+  const isSupervisor = user.role === "supervisor" || user.role === "admin";
+  const rows = await db
+    .select()
+    .from(incidentsTable)
+    .where(
+      isSupervisor
+        ? eq(incidentsTable.id, incidentId)
+        : and(eq(incidentsTable.id, incidentId), eq(incidentsTable.userId, user.id)),
+    )
+    .limit(1);
+
+  const incident = rows[0];
+  if (!incident) {
+    res.status(404).json({ detail: "Report not found" });
+    return;
+  }
+
+  res.json(reportDict(incident));
+});
 
 export default router;

@@ -93,3 +93,16 @@ export async function requireAuth(
   req.user = user;
   next();
 }
+
+export function requireSupervisor(
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction,
+): void {
+  const role = req.user?.role;
+  if (role !== "supervisor" && role !== "admin") {
+    res.status(403).json({ detail: "Supervisor access required" });
+    return;
+  }
+  next();
+}

@@ -1,19 +1,39 @@
 import React from "react";
 import { StyleSheet, View, useColorScheme } from "react-native";
 import { WebView } from "react-native-webview";
-import { buildMapHtml, mapThemeFromColors, type MapPoint } from "@/constants/mapHtml";
+import { buildMapHtml, mapThemeFromColors, type MapPoint, type MapPinDropOptions } from "@/constants/mapHtml";
 import { useColors } from "@/hooks/useColors";
 
 interface RouteMapProps {
   points: MapPoint[];
   route?: [number, number][];
   height?: number;
+  pinDropEnabled?: boolean;
+  pinMarker?: { lat: number; lon: number };
+  initialCenter?: { lat: number; lon: number; zoom?: number };
+  onPinDrop?: (lat: number, lon: number) => void;
+  onMarkerPress?: (id: number) => void;
 }
 
-export function RouteMap({ points, route = [], height = 260 }: RouteMapProps) {
+export function RouteMap({
+  points,
+  route = [],
+  height = 260,
+  pinDropEnabled = false,
+  pinMarker,
+  initialCenter,
+  onPinDrop,
+  onMarkerPress,
+}: RouteMapProps) {
   const colors = useColors();
   const scheme = useColorScheme();
-  const html = buildMapHtml(points, route, mapThemeFromColors(colors, scheme === "light" ? "light" : "dark"));
+  const pinOpts: MapPinDropOptions = { pinDropEnabled, pinMarker, initialCenter };
+  const html = buildMapHtml(
+    points,
+    route,
+    mapThemeFromColors(colors, scheme === "light" ? "light" : "dark"),
+    pinOpts
+  );
   return (
     <View style={[styles.wrap, { height, borderColor: colors.border }]}>
       <WebView
@@ -23,6 +43,13 @@ export function RouteMap({ points, route = [], height = 260 }: RouteMapProps) {
         scrollEnabled={false}
         javaScriptEnabled
         domStorageEnabled
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data) as { type: string; lat: number; lon: number; id?: number };
+            if (data.type === "pinDrop" && onPinDrop) onPinDrop(data.lat, data.lon);
+            if (data.type === "markerPress" && onMarkerPress && data.id != null) onMarkerPress(data.id);
+          } catch {}
+        }}
       />
     </View>
   );

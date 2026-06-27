@@ -1,0 +1,443 @@
+We already have an existing Wahatna / Aman-OS project. Do not rebuild it from scratch. First inspect the current codebase, then modify the existing implementation.
+
+Current project context:
+
+* Frontend: Expo React Native mobile app in `artifacts/wahatna-mobile`
+* Backend: TypeScript Express API in `artifacts/api-server`
+* Database: PostgreSQL with Drizzle ORM
+* Current backend routes include:
+
+  * POST `/api/auth/register`
+  * POST `/api/auth/login`
+  * GET `/api/auth/me`
+  * POST `/api/report`
+  * GET `/api/dashboard`
+  * POST `/api/fleet/optimize`
+  * PATCH `/api/worker/location`
+  * POST `/api/worker/push-token`
+  * GET `/api/healthz`
+* Current backend modules include:
+
+  * `lib/auth.ts`
+  * `lib/vision.ts`
+  * `lib/agent.ts`
+  * `lib/heat.ts`
+  * `lib/optimizer.ts`
+  * `lib/seed.ts`
+  * `lib/serialize.ts`
+* Current database includes:
+
+  * `users`
+  * `incidents`
+  * `reports`
+  * `fleet_waypoints`
+* Current mobile screens include:
+
+  * Home `index.tsx`
+  * Report `report.tsx`
+  * Fleet `fleet.tsx`
+  * Dashboard `dashboard.tsx`
+* Current app has a shift toggle, worker-style registration, dashboard stats, heat compliance banner, leaderboard, report form, fleet optimization, and offline queue.
+
+Goal:
+Make the app feel like a polished UAE rural municipal safety/reporting app for Al Qua’a. The app should be for normal community users/reporters and supervisors. Normal users report hazards. Supervisors review, track, update, and escalate reports. The UI should be light, modern, UAE greenery/oasis themed, and easy to use in English, Arabic, Urdu, and Hindi.
+
+Before making code changes:
+
+1. Inspect the project structure and actual file names.
+2. Create a concise implementation plan.
+3. Mention the files/routes/schema/components you will change.
+4. Then implement in phases.
+5. After each phase, run type checks/build checks and fix errors.
+6. After each phase, let me review it, if I approve it, you push it with serena-sa token, but do not delete all previous commits, only merge and add to the existing commits without breaking anything and keeping the history of timestamped commits
+
+Major required edits:
+
+1. Redesign the UI theme
+   The current UI is bad and needs a full visual refresh.
+   Apply a light UAE greenery/oasis theme:
+
+* Light theme by default
+* White cards
+* Soft green primary color
+* Sand/beige background accents
+* Palm tree logo/icon
+* Clean modern spacing
+* Rounded cards/buttons
+* Readable typography
+* High contrast text
+* Friendly municipal safety style
+* Avoid dark/heavy dashboard colors
+* Avoid clutter
+* Make it look polished, not like a basic student prototype
+
+Add or update a shared theme file if one exists. Use consistent colors, spacing, status badges, buttons, cards, and headers across the app.
+
+2. Remove “Start Shift”
+   Remove the shift concept from the normal user experience.
+
+* Remove the Start Shift / shift toggle UI from Home.
+* Remove any wording that makes the app feel like a worker attendance app.
+* Do not require `shift_active` for reporting or location features.
+* If `shift_active` exists in the database, stop using it in the frontend flow unless needed for backward compatibility.
+* Replace Home with:
+
+  * welcome message
+  * Report Hazard button
+  * My Reports status summary
+  * safety/heat alert banner
+  * language selector shortcut
+  * offline sync status
+  * latest report updates
+
+3. Add multilingual support
+   Add full language support for:
+
+* English
+* Arabic
+* Urdu
+* Hindi
+
+Requirements:
+
+* Add translation files.
+* No hard-coded UI text in screens.
+* Add language selector.
+* Store selected language locally and, if easy, in the user profile/database.
+* Arabic and Urdu must use RTL layout.
+* English and Hindi should use LTR layout.
+* Support translated:
+
+  * login
+  * register
+  * home
+  * report
+  * map/route
+  * dashboard
+  * my reports/status tracking
+  * supervisor dashboard
+  * errors
+  * success banners
+  * permission instructions
+  * status flags
+* Add fallback to English if a translation key is missing.
+
+4. Fix registration and roles
+   The public register page should be only for normal users/reporters.
+
+* Remove worker/supervisor role selection from Register.
+* Any new registered account must always be a normal user.
+* Backend must ignore any role sent from the client during registration.
+* Supervisors cannot register like normal users.
+* Supervisor dashboard should only be accessible to users already in the database with role `supervisor`.
+* Keep or update seed logic so a demo supervisor can exist.
+* Normal users must be blocked from supervisor screens and supervisor API routes.
+* Show a friendly “not authorized” message if a normal user tries to access supervisor tools. there should be no way for normal user to access those or see them, hide them entirely.
+
+Suggested role model:
+
+* `user` or `reporter` for normal users
+* `supervisor` for supervisors
+
+Update old `field_worker` naming if needed, or map it safely for backward compatibility.
+
+5. Redesign reporting flow
+   Make reporting simple and transparent.
+
+User should be able to:
+
+* Select hazard category
+* Add description/details
+* Reporter can not choose severity, they can only provide details about the hazard and attach pictures, then the model that will be integrated will decide the severity, which the user will not be notified about.
+* Add location using:
+
+  1. GPS detected location if permission is granted
+  2. Manual map pin
+  3. Manual address/details
+* Take or upload pictures
+* Attach pictures at the end of the report
+* Add their contact phone number, one mandatory, an one optional.
+* Review a summary before submitting
+* Submit online or save offline and sync later, so it won't be lost if offline, and if the user is offline and they think it's super severe, add a note that they should call 999.
+
+Location permission behavior:
+
+* If GPS permission is granted, use current location automatically.
+* If GPS permission is denied, do not block the report.
+* Show OS-specific instructions:
+
+  * iOS: Settings > Privacy & Security > Location Services > app name
+  * Android: Settings > Apps > app name > Permissions > Location
+  * Web: browser location permission settings
+* Always allow manual pin/address as a fallback.
+* and provide details, or search the location in the map to add pin.
+
+After successful submission:
+
+* Show a confirmation banner:
+  “Your report has been received and will be reviewed.” with a green icon (vrai)
+* Show a report reference/ID.
+* Show initial status: Pending review. and expected response time and confirmation that the team will take care of it as soon as they can.
+* Add a clear button/link to “Track report.”
+
+6. Add live report tracking/status transparency
+   Users must be able to track their reports.
+
+Statuses:
+
+* Pending review
+* Under review
+* Assigned / dispatched
+* Completed
+* Late / needs attention (only shown or flagged in the supervisor side)
+* Rejected / invalid
+
+User side:
+
+* Add “My Reports” or status tracking screen.
+* Show each submitted report with:
+
+  * category
+  * submitted date/time
+  * location
+  * severity
+  * photo thumbnail if available
+  * current status badge
+  * expected response deadline
+  * status timeline/history
+* Add live refresh using polling every 15–30 seconds while the screen is open, unless WebSockets are already easy to add.
+* Show in-app banner/notification when status changes.
+
+Supervisor side:
+
+* Supervisor can see all reports.
+* Supervisor can filter by:
+
+  * status
+  * severity
+  * category
+  * late reports
+  * date
+* Supervisor can update status.
+* Supervisor can add notes.
+* Supervisor can mark completed.
+* Supervisor can reject a report only if a reason is provided.
+* Supervisor can see SLA deadline and escalation flag.
+
+7. Add severity-based SLA and escalation
+   Reports should have deadlines based on severity.
+
+Suggested SLA rules:
+
+* Critical hazards: fire, radiation leakage, electrical danger, life safety emergency, major road blockage
+
+  * due in less than 1 day
+  * use 4–12 hours depending on implementation simplicity
+* High severity: dangerous flooding, major water leak affecting people/animals, heat stress danger
+
+  * due within 24 hours
+* Medium severity: non-urgent water leakage, minor road damage, waste hazard
+
+  * due within 3 days
+* Low severity/general maintenance
+
+  * due within 5–7 days
+
+Backend/database requirements:
+Add fields where needed:
+
+* `status`
+* `severity`
+* `due_at`
+* `escalation_required`
+* `escalated_at`
+* `escalation_level`
+* `supervisor_notes`
+* `rejection_reason`
+* `status_history`
+* `location_source`
+* `address_details`
+
+Behavior:
+
+The reporting decision procedure must be done using k2 think v2 agent. as the agent should calculate the time stamp dynamically.
+
+* When a report is created, calculate `due_at`.
+* If the deadline passes and the report is not completed, mark it as `Late / needs attention`.
+* Flag it as needing escalation to higher authority.
+* Put late/critical reports at the top of supervisor dashboard.
+* Add a simple function/endpoint/check that updates overdue reports.
+* If true scheduled background jobs are not available, run the overdue check when supervisor dashboard or report lists are loaded, marked with red.
+
+8. Update map behavior
+   Reporting map:
+
+* User can keep GPS location if available.
+* User can manually drop a pin for the incident.
+* User can add address/location details.
+* The map should make it clear whether the location came from GPS, manual pin, or manual address.
+
+Navigation/route map:
+
+* App should automatically detect the user’s current location when permission is granted.
+* User only chooses the destination.
+* User chooses transportation mode:
+
+  * walking
+  * car
+  * bicycle if easy
+  * municipal/service vehicle if useful
+* If permission is denied, show OS-specific permission guidance and allow manual start location.
+
+9. Improve actual route optimization
+   The route optimization should not just look like regular Google Maps.
+
+For multiple incident stops:
+
+* Use or improve the existing genetic algorithm optimizer in `lib/optimizer.ts`.
+* Optimize visit order using distance and severity/priority.
+* Compare:
+
+  * original/report order route
+  * optimized route
+* Show:
+
+  * optimized order
+  * distance savings
+  * estimated time savings if possible
+  * priority explanation
+* Critical incidents should be prioritized even if the route is slightly longer.
+
+For transportation mode:
+
+* Car/service vehicle should use road-style assumptions.
+* Walking should allow more direct pedestrian-style estimates only when safe/reasonable.
+* Do not pretend the app can walk through walls, buildings, private farms, restricted areas, or unsafe terrain.
+* If detailed obstacle/path data is unavailable, label walking result as “estimated walking route.”
+* For walking mode, use straight-line/pedestrian estimate with warnings and fallback to safer route assumptions when barriers are unknown.
+* Do not claim perfect obstacle-aware routing unless it is actually implemented.
+
+10. Supervisor dashboard redesign
+    Only supervisor users can access this dashboard.
+
+It should include:
+
+* Total reports
+* Pending review count
+* Under review count
+* Assigned/dispatched count
+* Completed count
+* Late/needs attention count
+* Critical hazards count
+* Report list
+* Map/list of active incidents, so the map shows pins of active incidents
+* Filters
+* SLA deadline countdown
+* Escalation badge
+* Status update controls
+* Supervisor notes
+* Status history/timeline
+
+11. Normal user home/dashboard
+    Normal users should not see supervisor tools.
+
+Normal user home should include:
+
+* Report Hazard button
+* My Reports cards
+* Heat/safety alert
+* Language selector
+* Offline sync status
+* Latest status updates
+* Simple map/navigation shortcut
+* Friendly confirmation and guidance messages
+
+12. Notifications and banners
+    Add clear feedback:
+
+* Report submitted successfully
+* Report saved offline
+* Sync completed
+* Status updated
+* Location permission denied with guidance
+* Report is late/needs attention for supervisor
+* Escalation required
+
+If Expo push notifications are already present, connect them where reasonable. If not, implement in-app banners first.
+
+13. Keep/improve offline support
+    Keep offline-first reporting.
+
+* User can create report offline.
+* Save locally.
+* Sync when internet returns.
+* Show sync status.
+* Avoid duplicate submissions. warn if two reports were submitted at the same time or with the same details.
+* Queue photos safely if possible.
+
+14. Backend API changes
+    Update or add endpoints as needed:
+
+* POST `/api/auth/register` normal user only
+* POST `/api/auth/login`
+* GET `/api/auth/me`
+* POST `/api/report`
+* GET `/api/reports/my`
+* GET `/api/reports/:id`
+* GET `/api/supervisor/reports`
+* GET `/api/supervisor/dashboard`
+* PATCH `/api/supervisor/reports/:id/status`
+* PATCH `/api/supervisor/reports/:id/notes`
+* POST or PATCH endpoint for overdue/escalation check if needed
+* POST `/api/fleet/optimize`
+* GET `/api/healthz`
+
+All supervisor endpoints must require JWT authentication and role `supervisor`.
+
+15. Security and data integrity
+    Keep existing security standards:
+
+* Password hashing
+* JWT auth
+* JWT secret in environment secrets only
+* Image upload size limit
+* Image MIME validation
+* Clean 400 errors for bad uploads
+* Server-side role enforcement
+* Do not trust frontend role values
+
+16. Testing checklist
+    After implementation, verify:
+
+* App builds without TypeScript errors.
+* Normal user can register without role selection.
+* Register endpoint always creates a normal user.
+* Supervisor cannot register through public register page.
+* Seeded/existing supervisor can log in.
+* Normal user cannot access supervisor dashboard.
+* English, Arabic, Urdu, and Hindi switching works.
+* Arabic and Urdu display RTL.
+* Report can be submitted with GPS.
+* Report can be submitted with manual pin.
+* Report can be submitted with manual address/details.
+* Photo upload works.
+* Submission confirmation banner appears.
+* Report appears in My Reports.
+* User can see status flag.
+* Supervisor can update status.
+* User sees updated status after refresh/polling.
+* SLA deadline is calculated correctly.
+* Critical reports get shorter deadlines than non-urgent reports.
+* Overdue reports become Late / needs attention.
+* Late reports show escalation flag.
+* Route optimization compares original vs optimized route.
+* Critical incidents affect optimized route priority.
+* Walking mode does not simply copy car routing without explanation.
+* Offline report queue works and syncs after reconnect.
+
+Important implementation style:
+
+* Do not remove useful existing logic unless it conflicts with the new requirements.
+* Reuse existing modules where possible.
+* Keep changes organized and explain what changed.
+* Make the app feel like Aman-OS/Wahatna for rural Al Qua’a, not a generic worker app.

@@ -13,7 +13,7 @@ import { userDict } from "../lib/serialize";
 const router: IRouter = Router();
 
 router.post("/auth/register", async (req: Request, res: Response) => {
-  const { username, email, password, full_name, employee_id } = req.body ?? {};
+  const { username, email, password, full_name } = req.body ?? {};
   if (!username || !email || !password) {
     res.status(400).json({ detail: "username, email and password are required" });
     return;
@@ -46,8 +46,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       email,
       passwordHash,
       fullName: full_name ?? null,
-      employeeId: employee_id ?? null,
-      role: "field_worker",
+      role: "user",
     })
     .returning();
   const user = inserted[0]!;

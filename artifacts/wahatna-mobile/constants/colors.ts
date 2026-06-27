@@ -1,10 +1,54 @@
+/**
+ * Wahatna — UAE oasis light theme palette.
+ * A single light palette is used; dark values are kept for reference only.
+ * useColors always returns the light palette regardless of system setting.
+ */
+
+const light = {
+  background: "#F5F2EC",   // warm sand
+  card: "#FFFFFF",
+  cardForeground: "#1A1A1A",
+  foreground: "#1A1A1A",
+  text: "#1A1A1A",
+  tint: "#2D7A3A",
+  primary: "#2D7A3A",      // UAE forest green
+  primaryForeground: "#FFFFFF",
+  secondary: "#E8F5E9",
+  secondaryForeground: "#1A1A1A",
+  muted: "#F0EDE6",
+  mutedForeground: "#6B7280",
+  accent: "#B45309",
+  accentForeground: "#FFFFFF",
+  destructive: "#DC2626",
+  destructiveForeground: "#FFFFFF",
+  border: "#E5E0D8",
+  input: "#E5E0D8",
+  surface: "#FFFFFF",
+  surface2: "#F0EDE6",
+  danger: "#DC2626",
+  warning: "#B45309",
+  success: "#2D7A3A",
+  // glow helpers (kept for badge compatibility)
+  glowAmber: "rgba(180,83,9,0.12)",
+  glowRed: "rgba(220,38,38,0.12)",
+  glowGreen: "rgba(45,122,58,0.12)",
+  glowOrange: "rgba(180,83,9,0.12)",
+  glowWarm: "rgba(107,114,128,0.08)",
+  // severity
+  severityGreen: "#2D7A3A",
+  severityAmber: "#B45309",
+  severityRed: "#DC2626",
+  severityCritical: "#991B1B",
+};
+
+// Dark values kept for reference; useColors does NOT use them.
 const dark = {
-  text: "#F2EACC",
-  tint: "#6DB33F",
   background: "#1C1610",
-  foreground: "#F2EACC",
   card: "#241C12",
   cardForeground: "#F2EACC",
+  foreground: "#F2EACC",
+  text: "#F2EACC",
+  tint: "#6DB33F",
   primary: "#6DB33F",
   primaryForeground: "#14100A",
   secondary: "#2E2215",
@@ -33,45 +77,10 @@ const dark = {
   severityCritical: "#A8442B",
 };
 
-const light = {
-  text: "#2B2113",
-  tint: "#4E8C2A",
-  background: "#F4EAD3",
-  foreground: "#2B2113",
-  card: "#FBF5E6",
-  cardForeground: "#2B2113",
-  primary: "#4E8C2A",
-  primaryForeground: "#FFFFFF",
-  secondary: "#EADCBE",
-  secondaryForeground: "#5A4A2E",
-  muted: "#EADCBE",
-  mutedForeground: "#8A7551",
-  accent: "#A06A12",
-  accentForeground: "#FFFFFF",
-  destructive: "#B14A2C",
-  destructiveForeground: "#FFFFFF",
-  border: "#DCCAA3",
-  input: "#DCCAA3",
-  surface: "#FBF5E6",
-  surface2: "#F0E3C8",
-  danger: "#B14A2C",
-  warning: "#A06A12",
-  success: "#4E8C2A",
-  glowAmber: "rgba(160,106,18,0.14)",
-  glowRed: "rgba(177,74,44,0.14)",
-  glowGreen: "rgba(78,140,42,0.14)",
-  glowOrange: "rgba(160,106,18,0.14)",
-  glowWarm: "rgba(150,118,60,0.10)",
-  severityGreen: "#4E8C2A",
-  severityAmber: "#A06A12",
-  severityRed: "#B14A2C",
-  severityCritical: "#8A3320",
-};
-
 const colors = {
   light,
   dark,
-  radius: 18,
+  radius: 16,
 };
 
 export default colors;
